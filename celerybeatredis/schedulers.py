@@ -61,8 +61,7 @@ class PeriodicTask(object):
 
     no_changes = False
 
-
-    def __init__(self, name, task, schedule, key=None, enabled=True, task_args=[], task_kwargs={}, **kwargs):
+    def __init__(self, prefix, name, task, schedule, key=None, enabled=True, task_args=[], task_kwargs={}, **kwargs):
         self.task = task
         self.enabled = enabled
         if isinstance(schedule, self.Interval):
@@ -73,9 +72,9 @@ class PeriodicTask(object):
         self.kwargs = task_kwargs
 
         if not key:
-            self.name = current_app.conf.CELERY_REDIS_SCHEDULER_KEY_PREFIX + name
+            self.name = prefix + name
         else:
-            self.name = current_app.conf.CELERY_REDIS_SCHEDULER_KEY_PREFIX + name + ':' + key
+            self.name = prefix + name + ':' + key
 
 
     class Interval(object):
@@ -123,10 +122,10 @@ class PeriodicTask(object):
             )
 
     @staticmethod
-    def get_all():
+    def get_all(key_prefix):
         """get all of the tasks, for best performance with large amount of tasks, return a generator
         """
-        tasks = rdb.keys(current_app.conf.CELERY_REDIS_SCHEDULER_KEY_PREFIX + '*')
+        tasks = rdb.keys(key_prefix + '*')
         for task_name in tasks:
             yield json.loads(rdb.get(task_name), cls=DateTimeDecoder)
 
@@ -150,7 +149,7 @@ class PeriodicTask(object):
             raise ValidationError(msg)
 
     @staticmethod
-    def from_dict(d):
+    def from_dict(key_prefix, d):
         """
         build PeriodicTask instance from dict
         :param d: dict
@@ -166,7 +165,7 @@ class PeriodicTask(object):
                 d['crontab']['day_of_month'],
                 d['crontab']['month_of_year']
             )
-        task = PeriodicTask(d['name'], d['task'], schedule)
+        task = PeriodicTask(key_prefix, d['name'], d['task'], schedule)
         for key in d:
             if key not in ('interval', 'crontab', 'schedule'):
                 setattr(task, key, d[key])
@@ -285,8 +284,8 @@ class RedisScheduler(Scheduler):
     def get_from_database(self):
         # self.sync()
         d = {}
-        for task in PeriodicTask.get_all():
-            t = PeriodicTask.from_dict(task)
+        for task in PeriodicTask.get_all(current_app.conf.CELERY_REDIS_SCHEDULER_KEY_PREFIX):
+            t = PeriodicTask.from_dict(current_app.conf.CELERY_REDIS_SCHEDULER_KEY_PREFIX, task)
             d[t.name] = RedisScheduleEntry(t)
         return d
 
