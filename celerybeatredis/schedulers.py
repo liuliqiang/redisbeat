@@ -61,7 +61,7 @@ class PeriodicTask(object):
 
     no_changes = False
 
-    def __init__(self, prefix, name, task, schedule, key=None, enabled=True, task_args=[], task_kwargs={}, **kwargs):
+    def __init__(self, prefix, name, task, schedule, key, enabled=True, task_args=[], task_kwargs={}, **kwargs):
         self.task = task
         self.enabled = enabled
         if isinstance(schedule, self.Interval):
@@ -71,11 +71,9 @@ class PeriodicTask(object):
         self.args = task_args
         self.kwargs = task_kwargs
 
-        if not key:
-            self.name = prefix + name
-        else:
-            self.name = prefix + name + ':' + key
-
+        self.prefix = prefix
+        self.name = name
+        self.key = key
 
     class Interval(object):
 
@@ -127,7 +125,12 @@ class PeriodicTask(object):
         """
         tasks = rdb.keys(key_prefix + '*')
         for task_name in tasks:
-            yield json.loads(rdb.get(task_name), cls=DateTimeDecoder)
+            dct = json.loads(rdb.get(task_name), cls=DateTimeDecoder) 
+            # task name should always correspond to the key in redis to avoid
+            # issues arising when saving keys - we want to add information to
+            # the current key, not create a new key
+            dct['key'] = task_name
+            yield dct
 
     def save(self):
         # must do a deepcopy
@@ -136,7 +139,10 @@ class PeriodicTask(object):
             self_dict['interval'] = self.interval.__dict__
         if self_dict.get('crontab'):
             self_dict['crontab'] = self.crontab.__dict__
-        rdb.set(self.name, json.dumps(self_dict, cls=DateTimeEncoder))
+
+        # remove the key from the dict so we don't save it into the redis
+        del self_dict['key']
+        rdb.set(self.key, json.dumps(self_dict, cls=DateTimeEncoder))
 
     def clean(self):
         """validation to ensure that you only have
@@ -165,10 +171,10 @@ class PeriodicTask(object):
                 d['crontab']['day_of_month'],
                 d['crontab']['month_of_year']
             )
-        task = PeriodicTask(key_prefix, d['name'], d['task'], schedule)
-        for key in d:
-            if key not in ('interval', 'crontab', 'schedule'):
-                setattr(task, key, d[key])
+        task = PeriodicTask(key_prefix, d['name'], d['task'], schedule, d['key'])
+        for elem in d:
+            if elem not in ('interval', 'crontab', 'schedule'):
+                setattr(task, elem, d[elem])
         return task
 
     @property
@@ -196,7 +202,7 @@ class RedisScheduleEntry(ScheduleEntry):
         self._task = task
 
         self.app = current_app._get_current_object()
-        self.name = self._task.name
+        self.name = self._task.prefix + self._task.name + ':' + self._task.key
         self.task = self._task.task
 
         self.schedule = self._task.schedule
@@ -286,7 +292,7 @@ class RedisScheduler(Scheduler):
         d = {}
         for task in PeriodicTask.get_all(current_app.conf.CELERY_REDIS_SCHEDULER_KEY_PREFIX):
             t = PeriodicTask.from_dict(current_app.conf.CELERY_REDIS_SCHEDULER_KEY_PREFIX, task)
-            d[t.name] = RedisScheduleEntry(t)
+            d[t.key] = RedisScheduleEntry(t)
         return d
 
     @property
