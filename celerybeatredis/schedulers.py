@@ -131,12 +131,15 @@ class PeriodicTask(object):
         """
         tasks = rdb.keys(key_prefix + '*')
         for task_key in tasks:
-            dct = json.loads(rdb.get(task_key), cls=DateTimeDecoder)
-            # task name should always correspond to the key in redis to avoid
-            # issues arising when saving keys - we want to add information to
-            # the current key, not create a new key
-            dct['key'] = task_key
-            yield dct
+            try:
+                dct = json.loads(rdb.get(task_key), cls=DateTimeDecoder)
+                # task name should always correspond to the key in redis to avoid
+                # issues arising when saving keys - we want to add information to
+                # the current key, not create a new key
+                dct['key'] = task_key
+                yield dct
+            except json.JSONDecodeError:  # handling bad json format by ignoring the task
+                get_logger(__name__).warning('ERROR Reading task value at %s', task_key)
 
     def save(self):
         # must do a deepcopy
