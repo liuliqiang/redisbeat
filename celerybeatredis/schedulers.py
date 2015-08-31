@@ -24,6 +24,14 @@ from decoder import DateTimeDecoder, DateTimeEncoder
 # share with result backend
 rdb = StrictRedis.from_url(current_app.conf.CELERY_REDIS_SCHEDULER_URL)
 
+ADD_ENTRY_ERROR = """\
+
+Couldn't add entry %r to redis schedule: %r. Contents: %r
+"""
+
+logger = get_logger(__name__)
+debug, info, error = logger.debug, logger.info, logger.error
+
 
 class ValidationError(Exception):
     pass
@@ -128,6 +136,9 @@ class PeriodicTask(object):
         tasks = rdb.keys(key_prefix + '*')
         for task_name in tasks:
             yield json.loads(rdb.get(task_name), cls=DateTimeDecoder)
+
+    def delete(self):
+        rdb.delete(self.name)
 
     def save(self):
         # must do a deepcopy
@@ -249,11 +260,38 @@ class RedisScheduleEntry(ScheduleEntry):
             self._task.last_run_at = self.last_run_at
         self._task.save()
 
+    @classmethod
+    def from_entry(cls, name, skip_fields=('relative', 'options'), **entry):
+        options = entry.get('options') or {}
+        fields = dict(entry)
+        for skip_field in skip_fields:
+            fields.pop(skip_field, None)
+        fields['name'] = current_app.conf.CELERY_REDIS_SCHEDULER_KEY_PREFIX + name
+        schedule = fields.pop('schedule')
+        schedule = celery.schedules.maybe_schedule(schedule)
+        if isinstance(schedule, celery.schedules.crontab):
+            fields['crontab'] = {
+                'minute': schedule._orig_minute,
+                'hour': schedule._orig_hour,
+                'day_of_week': schedule._orig_day_of_week,
+                'day_of_month': schedule._orig_day_of_month,
+                'month_of_year': schedule._orig_month_of_year
+            }
+        elif isinstance(schedule, celery.schedules.schedule):
+            fields['interval'] = {'every': max(schedule.run_every.total_seconds(), 0), 'period': 'seconds'}
+
+        fields['args'] = fields.get('args', [])
+        fields['kwargs'] = fields.get('kwargs', {})
+        fields['queue'] = options.get('queue')
+        fields['exchange'] = options.get('exchange')
+        fields['routing_key'] = options.get('routing_key')
+        return cls(PeriodicTask.from_dict(fields))
+
 
 class RedisScheduler(Scheduler):
     # how often should we sync in schedule information
     # from the backend redis database
-    UPDATE_INTERVAL = datetime.timedelta(seconds=5)
+    UPDATE_INTERVAL = datetime.timedelta(minutes=5)
 
     Entry = RedisScheduleEntry
 
@@ -272,7 +310,8 @@ class RedisScheduler(Scheduler):
                              or self.app.conf.CELERYBEAT_MAX_LOOP_INTERVAL or 300)
 
     def setup_schedule(self):
-        pass
+        self.install_default_entries(self.schedule)
+        self.update_from_dict(self.app.conf.CELERYBEAT_SCHEDULE)
 
     def requires_update(self):
         """check whether we should pull an updated schedule
@@ -289,6 +328,15 @@ class RedisScheduler(Scheduler):
             d[t.name] = RedisScheduleEntry(t)
         return d
 
+    def update_from_dict(self, dict_):
+        s = {}
+        for name, entry in dict_.items():
+            try:
+                s[name] = self.Entry.from_entry(name, **entry)
+            except Exception as exc:
+                error(ADD_ENTRY_ERROR, name, exc, entry)
+        self.schedule.update(s)
+
     @property
     def schedule(self):
         if self.requires_update():
@@ -297,10 +345,7 @@ class RedisScheduler(Scheduler):
         return self._schedule
 
     def sync(self):
-        # saving_list = [t for t in self._schedule.values() if t.name in PeriodicTask.get_all()]
-
-        # for entry in saving_list:
-        for entry in self.schedule.values():
+        for entry in self._schedule.values():
             entry.save()
 
     def close(self):
