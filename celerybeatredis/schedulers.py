@@ -229,7 +229,11 @@ class RedisScheduleEntry(ScheduleEntry):
         self.total_run_count = self._task.total_run_count
 
         if not self._task.last_run_at:
-            self._task.last_run_at = self._default_now()
+            # subtract some time from the current time to populate the last time
+            # that the task was run so that a newly scheduled task does not get missed
+            time_subtract = (self.app.conf.CELERYBEAT_MAX_LOOP_INTERVAL or 30)
+            self._task.last_run_at = self._default_now() - datetime.timedelta(seconds=time_subtract)
+            self.save()
         self.last_run_at = self._task.last_run_at
 
     def _default_now(self):
@@ -243,10 +247,13 @@ class RedisScheduleEntry(ScheduleEntry):
     __next__ = next
 
     def is_due(self):
+        due = self.schedule.is_due(self.last_run_at)
         if not self._task.enabled:
             get_logger(__name__).info('task %s disabled', self.name)
-            return False, 5.0  # 5 second delay for re-enable.
-        return self.schedule.is_due(self.last_run_at)
+            # if the task is disabled, we always return false, but the time that
+            # it is next due is returned as usual
+            return False, due[1]
+        return due
 
     def __repr__(self):
         return '<RedisScheduleEntry ({0} {1}(*{2}, **{3}) {{4}})>'.format(
