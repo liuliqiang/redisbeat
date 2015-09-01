@@ -3,6 +3,8 @@ celerybeat-redis
 
 It's modified from celerybeat-mongo (https://github.com/zakird/celerybeat-mongo)
 
+See Changelog in CHANGES.txt
+
 This is a Celery Beat Scheduler (http://celery.readthedocs.org/en/latest/userguide/periodic-tasks.html)
 that stores both the schedules themselves and their status
 information in a backend Redis database. It can be installed by
@@ -159,8 +161,3 @@ Becomes::
 	    }
 	}
 
-Changelog
-##########
-0.07
-load entries from CELERYBEAT_SCHEDULE thanks @sibson
-Prefix as Parameter thanks @asmodehn
