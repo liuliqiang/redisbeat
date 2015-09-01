@@ -1,8 +1,6 @@
 celerybeat-redis
 ################
 
-Github page: https://github.com/jayklx/celerybeatredis
-
 It's modified from celerybeat-mongo (https://github.com/zakird/celerybeat-mongo)
 
 This is a Celery Beat Scheduler (http://celery.readthedocs.org/en/latest/userguide/periodic-tasks.html)
@@ -160,3 +158,9 @@ Becomes::
 	        "microsecond": 667
 	    }
 	}
+
+Changelog
+##########
+0.07
+load entries from CELERYBEAT_SCHEDULE thanks @sibson
+Prefix as Parameter thanks @asmodehn
