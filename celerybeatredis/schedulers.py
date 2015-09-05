@@ -285,13 +285,14 @@ class RedisScheduleEntry(ScheduleEntry):
         fields['queue'] = options.get('queue')
         fields['exchange'] = options.get('exchange')
         fields['routing_key'] = options.get('routing_key')
-        return cls(PeriodicTask.from_dict(fields))
+        prefix = current_app.conf.CELERY_REDIS_SCHEDULER_KEY_PREFIX
+        return cls(PeriodicTask.from_dict(prefix, fields))
 
 
 class RedisScheduler(Scheduler):
     # how often should we sync in schedule information
     # from the backend redis database
-    UPDATE_INTERVAL = datetime.timedelta(minutes=5)
+    UPDATE_INTERVAL = datetime.timedelta(seconds=5)
 
     Entry = RedisScheduleEntry
 
