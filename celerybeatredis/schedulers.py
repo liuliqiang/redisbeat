@@ -40,8 +40,6 @@ class PeriodicTask(object):
     interval = None
     crontab = None
 
-    estimated_duration = 900
-
     args = []
     kwargs = {}
 
@@ -63,7 +61,7 @@ class PeriodicTask(object):
 
     no_changes = False
 
-    def __init__(self, name, task, schedule, key, estimated_duration=None, queue='celery', enabled=True, task_args=[], task_kwargs={}, **kwargs):
+    def __init__(self, name, task, schedule, key, queue='celery', enabled=True, task_args=[], task_kwargs={}, **kwargs):
         self.task = task
         self.enabled = enabled
         if isinstance(schedule, self.Interval):
@@ -71,8 +69,6 @@ class PeriodicTask(object):
         if isinstance(schedule, self.Crontab):
             self.crontab = schedule
 
-        self.estimated_duration = estimated_duration  # duration is needed only by frontend ( backend will execute asap )
-                                                      # -> better to move it frontend storage class ( child of periodic task ? )??
         self.queue = queue
 
         self.args = task_args
