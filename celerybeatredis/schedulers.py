@@ -304,8 +304,8 @@ class RedisScheduleEntry(ScheduleEntry):
         fields['queue'] = options.get('queue')
         fields['exchange'] = options.get('exchange')
         fields['routing_key'] = options.get('routing_key')
-        prefix = current_app.conf.CELERY_REDIS_SCHEDULER_KEY_PREFIX
-        return cls(PeriodicTask.from_dict(prefix, fields))
+        fields['key'] = fields['name']
+        return cls(PeriodicTask.from_dict(fields))
 
 
 class RedisScheduler(Scheduler):
