@@ -69,21 +69,21 @@ class PeriodicTask(object):
 
     no_changes = False
 
-    def __init__(self, prefix, name, task, schedule, key=None, enabled=True, task_args=[], task_kwargs={}, **kwargs):
+    def __init__(self, name, task, schedule, key, queue='celery', enabled=True, task_args=[], task_kwargs={}, **kwargs):
         self.task = task
         self.enabled = enabled
         if isinstance(schedule, self.Interval):
             self.interval = schedule
         if isinstance(schedule, self.Crontab):
             self.crontab = schedule
+
+        self.queue = queue
+
         self.args = task_args
         self.kwargs = task_kwargs
 
-        if not key:
-            self.name = prefix + name
-        else:
-            self.name = prefix + name + ':' + key
-
+        self.name = name
+        self.key = key
 
     class Interval(object):
 
@@ -134,8 +134,16 @@ class PeriodicTask(object):
         """get all of the tasks, for best performance with large amount of tasks, return a generator
         """
         tasks = rdb.keys(key_prefix + '*')
-        for task_name in tasks:
-            yield json.loads(rdb.get(task_name), cls=DateTimeDecoder)
+        for task_key in tasks:
+            try:
+                dct = json.loads(rdb.get(task_key), cls=DateTimeDecoder)
+                # task name should always correspond to the key in redis to avoid
+                # issues arising when saving keys - we want to add information to
+                # the current key, not create a new key
+                dct['key'] = task_key
+                yield dct
+            except json.JSONDecodeError:  # handling bad json format by ignoring the task
+                get_logger(__name__).warning('ERROR Reading task value at %s', task_key)
 
     def delete(self):
         rdb.delete(self.name)
@@ -147,7 +155,10 @@ class PeriodicTask(object):
             self_dict['interval'] = self.interval.__dict__
         if self_dict.get('crontab'):
             self_dict['crontab'] = self.crontab.__dict__
-        rdb.set(self.name, json.dumps(self_dict, cls=DateTimeEncoder))
+
+        # remove the key from the dict so we don't save it into the redis
+        del self_dict['key']
+        rdb.set(self.key, json.dumps(self_dict, cls=DateTimeEncoder))
 
     def clean(self):
         """validation to ensure that you only have
@@ -160,7 +171,7 @@ class PeriodicTask(object):
             raise ValidationError(msg)
 
     @staticmethod
-    def from_dict(key_prefix, d):
+    def from_dict(d):
         """
         build PeriodicTask instance from dict
         :param d: dict
@@ -176,10 +187,10 @@ class PeriodicTask(object):
                 d['crontab']['day_of_month'],
                 d['crontab']['month_of_year']
             )
-        task = PeriodicTask(key_prefix, d['name'], d['task'], schedule)
-        for key in d:
-            if key not in ('interval', 'crontab', 'schedule'):
-                setattr(task, key, d[key])
+        task = PeriodicTask(d['name'], d['task'], schedule, d['key'])
+        for elem in d:
+            if elem not in ('interval', 'crontab', 'schedule'):
+                setattr(task, elem, d[elem])
         return task
 
     @property
@@ -207,7 +218,7 @@ class RedisScheduleEntry(ScheduleEntry):
         self._task = task
 
         self.app = current_app._get_current_object()
-        self.name = self._task.name
+        self.name = self._task.key  # passing key here as the task name is a human use only field.
         self.task = self._task.task
 
         self.schedule = self._task.schedule
@@ -225,7 +236,11 @@ class RedisScheduleEntry(ScheduleEntry):
         self.total_run_count = self._task.total_run_count
 
         if not self._task.last_run_at:
-            self._task.last_run_at = self._default_now()
+            # subtract some time from the current time to populate the last time
+            # that the task was run so that a newly scheduled task does not get missed
+            time_subtract = (self.app.conf.CELERYBEAT_MAX_LOOP_INTERVAL or 30)
+            self._task.last_run_at = self._default_now() - datetime.timedelta(seconds=time_subtract)
+            self.save()
         self.last_run_at = self._task.last_run_at
 
     def _default_now(self):
@@ -239,9 +254,13 @@ class RedisScheduleEntry(ScheduleEntry):
     __next__ = next
 
     def is_due(self):
+        due = self.schedule.is_due(self.last_run_at)
         if not self._task.enabled:
-            return False, 5.0  # 5 second delay for re-enable.
-        return self.schedule.is_due(self.last_run_at)
+            get_logger(__name__).info('task %s disabled', self.name)
+            # if the task is disabled, we always return false, but the time that
+            # it is next due is returned as usual
+            return False, due[1]
+        return due
 
     def __repr__(self):
         return '<RedisScheduleEntry ({0} {1}(*{2}, **{3}) {{4}})>'.format(
@@ -250,7 +269,7 @@ class RedisScheduleEntry(ScheduleEntry):
         )
 
     def reserve(self, entry):
-        new_entry = Scheduler.reserve(self, entry)
+        new_entry = Scheduler.reserve(entry)
         return new_entry
 
     def save(self):
@@ -325,8 +344,8 @@ class RedisScheduler(Scheduler):
         # self.sync()
         d = {}
         for task in PeriodicTask.get_all(current_app.conf.CELERY_REDIS_SCHEDULER_KEY_PREFIX):
-            t = PeriodicTask.from_dict(current_app.conf.CELERY_REDIS_SCHEDULER_KEY_PREFIX, task)
-            d[t.name] = RedisScheduleEntry(t)
+            t = PeriodicTask.from_dict(task)
+            d[t.key] = RedisScheduleEntry(t)
         return d
 
     def update_from_dict(self, dict_):
