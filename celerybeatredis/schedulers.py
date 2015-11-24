@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # Copyright 2014 Kong Luoxing
 
 # Licensed under the Apache License, Version 2.0 (the 'License'); you may not
@@ -8,12 +9,15 @@ import datetime
 from celery.beat import Scheduler, ScheduleEntry
 from celery import current_app
 import celery.schedules
+from redis.exceptions import LockError
 
 from .task import PeriodicTask
 from .globals import rdb, logger, ADD_ENTRY_ERROR
 
 
 class RedisScheduleEntry(ScheduleEntry):
+    scheduler = None
+
     def __init__(self, task):
         self._task = task
 
@@ -55,11 +59,16 @@ class RedisScheduleEntry(ScheduleEntry):
 
     def is_due(self):
         due = self.schedule.is_due(self.last_run_at)
+
+        if not self.scheduler._lock_acquired:
+            return celery.schedules.schedstate(is_due=False, next=due[1])
+
         if not self._task.enabled:
             logger.info('task %s disabled', self.name)
             # if the task is disabled, we always return false, but the time that
             # it is next due is returned as usual
-            return celery.schedulers.schedstate(is_due=False, next=due[1])
+            return celery.schedules.schedstate(is_due=False, next=due[1])
+
         return due
 
     def __repr__(self):
@@ -128,6 +137,9 @@ class RedisScheduler(Scheduler):
         Scheduler.__init__(self, *args, **kwargs)
         self.max_interval = (kwargs.get('max_interval') \
                              or self.app.conf.CELERYBEAT_MAX_LOOP_INTERVAL or 300)
+        self._lock = rdb.lock('celery:beat:task_lock')
+        self._lock_acquired = self._lock.acquire(blocking=False)
+        self.Entry.scheduler = self
 
     def setup_schedule(self):
         self.install_default_entries(self.schedule)
@@ -139,6 +151,15 @@ class RedisScheduler(Scheduler):
         if not self._last_updated:
             return True
         return self._last_updated + self.UPDATE_INTERVAL < datetime.datetime.now()
+
+    def tick(self):
+        if not self._lock_acquired:
+            self._lock_acquired = self._lock.acquire(blocking=False)
+
+        # still cannot get lock
+        if not self._lock_acquired:
+            logger.warn('another beat is running, disable this node util it is shutdown')
+        return super(RedisScheduler, self).tick()
 
     def get_from_database(self):
         self.sync()
@@ -169,4 +190,14 @@ class RedisScheduler(Scheduler):
             entry.save()
 
     def close(self):
+        try:
+            self._lock.release()
+        except LockError:
+            pass
         self.sync()
+
+    def __del__(self):
+        try:
+            self._lock.release()
+        except LockError:
+            pass
