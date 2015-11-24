@@ -1,40 +1,39 @@
-celerybeat-redis
-################
+# celerybeat-redis
 
 It's modified from celerybeat-mongo (https://github.com/zakird/celerybeat-mongo)
 
-See Changelog in CHANGES.txt
+See Changelog in [CHANGES.md](./CHANGES.md)
 
 This is a Celery Beat Scheduler (http://celery.readthedocs.org/en/latest/userguide/periodic-tasks.html)
 that stores both the schedules themselves and their status
 information in a backend Redis database. It can be installed by
-installing the celerybeat-redis Python egg::
+installing the celerybeat-redis Python egg:
 
     # pip install celerybeat-redis
 
-And specifying the scheduler when running Celery Beat, e.g.::
+And specifying the scheduler when running Celery Beat, e.g.
 
     $ celery beat -S celerybeatredis.schedulers.RedisScheduler
 
 Settings for the scheduler are defined in your celery configuration file
-similar to how other aspects of Celery are configured::
+similar to how other aspects of Celery are configured
 
     CELERY_REDIS_SCHEDULER_URL = "redis://localhost:6379/1"
     CELERY_REDIS_SCHEDULER_KEY_PREFIX = 'tasks:meta:'
 
 You mush make these two value configured.
-CELERY_REDIS_SCHEDULER_KEY_PREFIX is used to generate keys in redis.
-The key was like::
+`CELERY_REDIS_SCHEDULER_KEY_PREFIX` is used to generate keys in redis.
+The key was like
 
-    tasks:meta:task-name-here:sha1-hash-value
-    tasks:meta:test-fib-every-3s:efff8ee06703c4cffad73834154a609dab0e1161
+    tasks:meta:task-name-here
+    tasks:meta:test-fib-every-3s
 
 Schedules can be manipulated in the Redis database through
 direct database manipulation. There exist two types of schedules,
 interval and crontab.
 crontab are not much tested yet.
 
-Interval::
+```json
 
     {
         "name" : "interval test schedule",
@@ -63,9 +62,10 @@ Interval::
 	        "microsecond": 667
 	    }
     }
+```
 
-The example from Celery User Guide::Periodic Tasks. ::
-
+The example from Celery User Guide::Periodic Tasks.
+```json
     {
     	CELERYBEAT_SCHEDULE = {
     	    'interval-test-schedule': {
@@ -75,9 +75,10 @@ The example from Celery User Guide::Periodic Tasks. ::
     	    }
     	}
     }
+```
 
 Becomes the following::
-
+```json
     {
         "name" : "interval test schedule",
         "task" : "task.add",
@@ -105,17 +106,20 @@ Becomes the following::
 	        "microsecond": 667
 	    }
     }
+```
 
 The following fields are required: name, task, crontab || interval,
 enabled when defining new tasks.
-total_run_count and last_run_at are maintained by the
+`total_run_count` and `last_run_at` are maintained by the
 scheduler and should not be externally manipulated.
 
 
 WARNING: crontab feature was not well tested. Bugs will be fixed later.
 
 The example from Celery User Guide::Periodic Tasks.
-(see: http://docs.celeryproject.org/en/latest/userguide/periodic-tasks.html#crontab-schedules)::
+(see: http://docs.celeryproject.org/en/latest/userguide/periodic-tasks.html#crontab-schedules)
+
+```json
 
 	{
 
@@ -127,10 +131,12 @@ The example from Celery User Guide::Periodic Tasks.
 		        'args': (16, 16),
 		    },
 		}
-	}
+    }
+```
 
-Becomes::
+Becomes:
 
+```json
 	{
 	    "_id" : ObjectId("53a91dfd455d1c1a4345fb59"),
 	    "name" : "add-every-monday-morning",
@@ -160,4 +166,4 @@ Becomes::
 	        "microsecond": 667
 	    }
 	}
-
+```

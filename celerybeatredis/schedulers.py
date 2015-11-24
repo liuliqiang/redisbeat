@@ -197,6 +197,7 @@ class RedisScheduler(Scheduler):
         self.sync()
 
     def __del__(self):
+        # celery beat will create Scheduler twice, first time create then destroy it, so we need release lock here
         try:
             self._lock.release()
         except LockError:
