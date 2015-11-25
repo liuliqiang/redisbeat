@@ -195,3 +195,14 @@ Becomes:
     }
 }
 ```
+
+# Deploy multiple nodes
+
+Original celery beat doesn't support multiple node deployment, multiple beat
+will send multiple tasks and make worker duplicate execution, celerybeat-redis
+use a redis lock to deal with it. Only one node running at a time, other nodes
+keep tick with minimal task interval, if this node down, when other node
+ticking, it will acquire the lock and continue to run.
+
+WARNING: this is an experiment feature, need more test, not production ready at
+this time.
