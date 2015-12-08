@@ -90,7 +90,7 @@ interval and crontab.
     },
     "total_run_count" : 5,
     "last_run_at" : {
-        "__type__", "datetime",
+        "__type__": "datetime",
         "year": 2014,
         "month": 8,
         "day": 30,
@@ -103,7 +103,7 @@ interval and crontab.
 ```
 
 The example from Celery User Guide::Periodic Tasks.
-```json
+```python
 CELERYBEAT_SCHEDULE = {
     'interval-test-schedule': {
         'task': 'tasks.add',
@@ -129,10 +129,10 @@ Becomes the following::
     ],
     "kwargs" : {
         "max_targets" : 100
-    }
+    },
     "total_run_count": 5,
     "last_run_at" : {
-        "__type__", "datetime",
+        "__type__": "datetime",
         "year": 2014,
         "month": 8,
         "day": 30,
@@ -152,7 +152,7 @@ scheduler and should not be externally manipulated.
 The example from Celery User Guide::Periodic Tasks.
 (see: http://docs.celeryproject.org/en/latest/userguide/periodic-tasks.html#crontab-schedules)
 
-```
+```python
 CELERYBEAT_SCHEDULE = {
     # Executes every Monday morning at 7:30 A.M
     'add-every-monday-morning': {
@@ -184,7 +184,7 @@ Becomes:
     "kwargs" : {},
     "total_run_count" : 1,
     "last_run_at" : {
-        "__type__", "datetime",
+        "__type__": "datetime",
         "year": 2014,
         "month": 8,
         "day": 30,
