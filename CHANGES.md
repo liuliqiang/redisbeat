@@ -10,3 +10,4 @@ v0.0.7 load entries from CELERYBEAT_SCHEDULE thanks @sibson
 v0.0.8 - v0.1.1 no new feature
 
 v0.1.2 celerybeat-redis can now run in multiple node, only one active, and other nodes are stand by
+v0.1.3 support python3
