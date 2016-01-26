@@ -16,7 +16,7 @@ import celery.schedules
 
 from .decoder import DateTimeDecoder, DateTimeEncoder
 from .exceptions import ValidationError
-from .globals import rdb, bytes_to_str, default_encoding
+from .globals import rdb, bytes_to_str, default_encoding, logger
 
 
 class PeriodicTask(object):
