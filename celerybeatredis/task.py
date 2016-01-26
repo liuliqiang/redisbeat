@@ -15,6 +15,7 @@ except ImportError:
 import celery.schedules
 
 from .decoder import DateTimeDecoder, DateTimeEncoder
+from .exceptions import ValidationError
 from .globals import rdb, bytes_to_str, default_encoding
 
 
@@ -129,7 +130,7 @@ class PeriodicTask(object):
                 logger.warning('ERROR Reading task value at %s', task_key)
 
     def delete(self):
-        rdb.delete(self.name)
+        rdb.set('deleted:' + self.key, 'deleted')
 
     def save(self):
         # must do a deepcopy
