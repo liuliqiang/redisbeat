@@ -124,6 +124,10 @@ class PeriodicTask(object):
                 # task name should always correspond to the key in redis to avoid
                 # issues arising when saving keys - we want to add information to
                 # the current key, not create a new key
+
+                # don't return recently deleted tasks
+                if rdb.exists('deleted:' + task_key):
+                    continue
                 dct['key'] = task_key
                 yield dct
             except json.JSONDecodeError:  # handling bad json format by ignoring the task
@@ -142,7 +146,9 @@ class PeriodicTask(object):
 
         # remove the key from the dict so we don't save it into the redis
         del self_dict['key']
-        rdb.set(self.key, json.dumps(self_dict, cls=DateTimeEncoder))
+        # only save if the task wasn't deleted
+        if not rdb.exists('deleted:' + self.key):
+            rdb.set(self.key, json.dumps(self_dict, cls=DateTimeEncoder))
 
     def clean(self):
         """validation to ensure that you only have
