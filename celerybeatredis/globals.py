@@ -8,11 +8,12 @@ from redis.client import StrictRedis
 from celery import current_app
 from celery.utils.log import get_logger
 
-rdb = StrictRedis.from_url(current_app.conf.CELERY_REDIS_SCHEDULER_URL)
-
 ADD_ENTRY_ERROR = """\
 
 Couldn't add entry %r to redis schedule: %r. Contents: %r
 """
 
 logger = get_logger(__name__)
+
+
+

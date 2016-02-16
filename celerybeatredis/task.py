@@ -5,21 +5,21 @@
 # of the License at http://www.apache.org/licenses/LICENSE-2.0
 import datetime
 from copy import deepcopy
+from redis import StrictRedis
 
 try:
     import simplejson as json
 except ImportError:
     import json
 
-import celery.schedules
-
+from .exceptions import ValidationError
 from .decoder import DateTimeDecoder, DateTimeEncoder
-from .globals import rdb
 
 
 class PeriodicTask(object):
-    '''represents a periodic task
-    '''
+    """
+    Represents a periodic task
+    """
     name = None
     task = None
 
@@ -49,7 +49,7 @@ class PeriodicTask(object):
 
     no_changes = False
 
-    def __init__(self, name, task, schedule, key, queue='celery', enabled=True, task_args=[], task_kwargs={}, **kwargs):
+    def __init__(self, scheduler_url, name, task, schedule, key, queue='celery', enabled=True, task_args=[], task_kwargs={}, **kwargs):
         self.task = task
         self.enabled = enabled
         if isinstance(schedule, self.Interval):
@@ -64,6 +64,7 @@ class PeriodicTask(object):
 
         self.name = name
         self.key = key
+        self.rdb = StrictRedis.from_url(scheduler_url)
 
         self.running = False
 
@@ -74,9 +75,8 @@ class PeriodicTask(object):
             # could be seconds minutes hours
             self.period = period
 
-        @property
-        def schedule(self):
-            return celery.schedules.schedule(datetime.timedelta(**{self.period: self.every}))
+        def schedule(self, celery_schedules):
+            return celery_schedules.schedule(datetime.timedelta(**{self.period: self.every}))
 
         @property
         def period_singular(self):
@@ -96,9 +96,8 @@ class PeriodicTask(object):
             self.day_of_month = day_of_month
             self.month_of_year = month_of_year
 
-        @property
-        def schedule(self):
-            return celery.schedules.crontab(minute=self.minute,
+        def schedule(self, celery_schedules):
+            return celery_schedules.crontab(minute=self.minute,
                                             hour=self.hour,
                                             day_of_week=self.day_of_week,
                                             day_of_month=self.day_of_month,
@@ -112,9 +111,10 @@ class PeriodicTask(object):
             )
 
     @staticmethod
-    def get_all(key_prefix):
+    def get_all(scheduler_url, key_prefix):
         """get all of the tasks, for best performance with large amount of tasks, return a generator
         """
+        rdb = StrictRedis.from_url(scheduler_url)
         tasks = rdb.keys(key_prefix + '*')
         for task_key in tasks:
             try:
@@ -128,11 +128,11 @@ class PeriodicTask(object):
                 logger.warning('ERROR Reading task value at %s', task_key)
 
     def delete(self):
-        rdb.delete(self.name)
+        self.rdb.delete(self.name)
 
     def save(self):
         # must do a deepcopy
-        self_dict = deepcopy(self.__dict__)
+        self_dict = deepcopy({ k: v for k, v in self.__dict__.iteritems() if not isinstance(v, StrictRedis)})
         if self_dict.get('interval'):
             self_dict['interval'] = self.interval.__dict__
         if self_dict.get('crontab'):
@@ -140,7 +140,7 @@ class PeriodicTask(object):
 
         # remove the key from the dict so we don't save it into the redis
         del self_dict['key']
-        rdb.set(self.key, json.dumps(self_dict, cls=DateTimeEncoder))
+        self.rdb.set(self.key, json.dumps(self_dict, cls=DateTimeEncoder))
 
     def clean(self):
         """validation to ensure that you only have
@@ -153,7 +153,7 @@ class PeriodicTask(object):
             raise ValidationError(msg)
 
     @staticmethod
-    def from_dict(d):
+    def from_dict(d, scheduler_url):
         """
         build PeriodicTask instance from dict
         :param d: dict
@@ -169,18 +169,17 @@ class PeriodicTask(object):
                 d['crontab']['day_of_month'],
                 d['crontab']['month_of_year']
             )
-        task = PeriodicTask(d['name'], d['task'], schedule, d['key'])
+        task = PeriodicTask(scheduler_url, d['name'], d['task'], schedule, d['key'])
         for elem in d:
             if elem not in ('interval', 'crontab', 'schedule'):
                 setattr(task, elem, d[elem])
         return task
 
-    @property
-    def schedule(self):
+    def schedule(self, celery_schedules):
         if self.interval:
-            return self.interval.schedule
+            return self.interval.schedule(celery_schedules)
         elif self.crontab:
-            return self.crontab.schedule
+            return self.crontab.schedule(celery_schedules)
         else:
             raise Exception('must define interval or crontab schedule')
 
