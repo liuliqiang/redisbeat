@@ -158,7 +158,7 @@ class RedisScheduler(Scheduler):
 
         # still cannot get lock
         if not self._lock_acquired:
-            logger.warn('another beat is running, disable this node util it is shutdown')
+            logger.warn('another beat is running, disable this node until it is shutdown')
         return super(RedisScheduler, self).tick()
 
     def get_from_database(self):
