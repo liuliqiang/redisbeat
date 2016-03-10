@@ -1,7 +1,10 @@
 from __future__ import absolute_import
 
-from .schedulers import PeriodicTask
+from .task import PeriodicTask
+from .schedulers import RedisScheduler, RedisScheduleEntry
 
 __all__ = [
-    'PeriodicTask'
+    'PeriodicTask',
+    'RedisScheduler',
+    'RedisScheduleEntry'
 ]
