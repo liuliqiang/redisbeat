@@ -11,6 +11,7 @@ from celery.beat import Scheduler, ScheduleEntry
 from redis import StrictRedis
 
 from celery import current_app
+import kombu.utils
 import celery.schedules
 
 import datetime
@@ -32,10 +33,10 @@ class RedisScheduleEntry(object):
     """
     The Schedule Entry class is mainly here to handle the celery dependency injection
      and delegates everything to a PeriodicTask instance
-     It follows the Adapter Design pattern, trivially implemented in python with __getattr__ and __setattr__
+    It follows the Adapter Design pattern, trivially implemented in python with __getattr__ and __setattr__
+    This is similar to https://github.com/celery/django-celery/blob/master/djcelery/schedulers.py
+     that uses SQLAlchemy DBModels as delegates.
     """
-
-    schedule_url = None
 
     def __init__(self, name=None, task=None, enabled=True, last_run_at=None,
                  total_run_count=None, schedule=None, args=(), kwargs=None,
@@ -43,15 +44,11 @@ class RedisScheduleEntry(object):
 
         # defaults (MUST NOT call self here - or loop __getattr__ for ever)
         app = app or current_app
-        schedule_url = extrakwargs.get('schedule_url', app.conf.CELERY_REDIS_SCHEDULER_URL)
         # Setting a default time a bit before now to not miss a task that was just added.
         last_run_at = last_run_at or app.now() - datetime.timedelta(seconds=app.conf.CELERYBEAT_MAX_LOOP_INTERVAL)
 
-        logger.warn("Schedule in Entry {s}".format(s=schedule))
-
         # using periodic task as delegate
         object.__setattr__(self, '_task', PeriodicTask(
-            scheduler_url=schedule_url,  # TODO : get rid of that
             # Note : for compatibiilty with celery methods, the name of the task is actually the key in redis DB.
             # For extra fancy fields (like a human readable name, you can leverage extrakwargs)
             name=name,
@@ -63,8 +60,7 @@ class RedisScheduleEntry(object):
             options=options or {},
             last_run_at=last_run_at,
             total_run_count=total_run_count or 0,
-            # we filter out the extraargs we used here
-            **{k: v for k, v in extrakwargs.iteritems() if k not in ['schedule_url']}
+            **extrakwargs
         ))
 
         #
@@ -73,24 +69,8 @@ class RedisScheduleEntry(object):
 
         # The app is kept here (PeriodicTask should not need it)
         object.__setattr__(self, 'app', app)
-        object.__setattr__(self, 'schedule_url', schedule_url)
-        # TODO : maybe use schedule_url directly from app (only here, periodictask needs schedule url separately)
 
-        # self.last_run_at = last_run_at or self.app.now()
-        # self.total_run_count = total_run_count or 0
-        #
-        # if not self._task.total_run_count:
-        #     self._task.total_run_count = 0
-        #
-        # if not self._task.last_run_at:
-        #     # subtract some time from the current time to populate the last time
-        #     # that the task was run so that a newly scheduled task does not get missed
-        #     time_subtract = (self.app.conf.CELERYBEAT_MAX_LOOP_INTERVAL or 30)
-        #     self._task.last_run_at = self._default_now() - datetime.timedelta(seconds=time_subtract)
-        #     self.save()
-
-
-    # automatic delegation to PeriodicTask
+    # automatic delegation to PeriodicTask (easy delegate)
     def __getattr__(self, attr):
         return getattr(self._task, attr)
 
@@ -146,25 +126,19 @@ class RedisScheduleEntry(object):
         """See :meth:`~celery.schedule.schedule.is_due`."""
         due = self.schedule.is_due(self.last_run_at)
 
+        logger.info('task {0} due : {1}'.format(self.name, due))
         if not self.enabled:
-            logger.info('task %s disabled', self.name)
+            logger.info('task {0} disabled'.format(self.name))
             # if the task is disabled, we always return false, but the time that
             # it is next due is returned as usual
             return celery.schedulers.schedstate(is_due=False, next=due[1])
         return due
 
-    # TEST : even reprshould be delegated to task
-    # def __repr__(self):
-    #     return '<RedisScheduleEntry ({0} {1}(*{2}, **{3}) {{4}})>'.format(
-    #         self.name, self.task, self.args,
-    #         self.kwargs, self.schedule(),
-    #     )
-
-    # def __repr__(self):
-    #     return '<Entry: {0.name} {call} {0.schedule}'.format(
-    #         self,
-    #         call=reprcall(self.task, self.args or (), self.kwargs or {}),
-    #     )
+    def __repr__(self):
+        return '<RedisScheduleEntry: {0.name} {call} {0.schedule}'.format(
+            self,
+            call=kombu.utils.reprcall(self.task, self.args or (), self.kwargs or {}),
+        )
 
     #
     # ScheduleEntry needs to be an iterable
@@ -190,36 +164,6 @@ class RedisScheduleEntry(object):
         # Following celery.SchedulerEntry.__iter__() design
         return iter(self._task)
 
-    #
-    # Not needed any more
-    # def save(self):
-    #     if self.total_run_count > self._task.total_run_count:
-    #         self._task.total_run_count = self.total_run_count
-    #     if self.last_run_at and self._task.last_run_at and self.last_run_at > self._task.last_run_at:
-    #         self._task.last_run_at = self.last_run_at
-    #     self._task.save()
-
-    # def __reduce__(self):
-    #     return self.__class__, (
-    #         self.name, self.task, self.last_run_at, self.total_run_count,
-    #         self.schedule, self.args, self.kwargs, self.options,
-    #     )
-
-
-    # def update(self, other):
-    #     """Update values from another entry.
-    #
-    #     Does only update "editable" fields (task, schedule, args, kwargs,
-    #     options).
-    #
-    #     """
-    #     self.__dict__.update({'task': other.task, 'schedule': other.schedule,
-    #                           'args': other.args, 'kwargs': other.kwargs,
-    #                           'options': other.options})
-
-
-
-
     @staticmethod
     def get_all_as_dict(scheduler_url, key_prefix):
         """get all of the tasks, for best performance with large amount of tasks, return a generator
@@ -227,8 +171,6 @@ class RedisScheduleEntry(object):
         # Calling another generator
         for task_key, task_dict in PeriodicTask.get_all_as_dict(scheduler_url, key_prefix):
             yield task_key, task_dict
-
-
 
     @classmethod
     def from_entry(cls, scheduler_url, name, **entry):
@@ -302,33 +244,10 @@ class RedisScheduler(Scheduler):
         entry_class = entry_class or self.Entry
 
         d = {}
-        for key, task in entry_class.get_all_as_dict(self.schedule_url, key_prefix):
-            logger.debug('Building {0} from : {1}'.format(entry_class, task))
-            d[key] = entry_class(**dict(task, schedule_url=self.schedule_url, app=self.app))
+        for key, task in entry_class.get_all_as_dict(self.rdb, key_prefix):
+            # logger.debug('Building {0} from : {1}'.format(entry_class, task))
+            d[key] = entry_class(**dict(task, app=self.app))
         return d
-    #
-    # def merge_inplace(self, b):
-    #     schedule = self.schedule
-    #     A, B = set(schedule), set(b)
-    #
-    #     # Remove items from disk not in the schedule anymore.
-    #     for key in A ^ B:
-    #         schedule.pop(key, None)
-    #
-    #     # Update and add new items in the schedule
-    #     for key in B:
-    #         logger.warn("Merging {k} : {e}".format(k=key, e=dict(b[key])))
-    #         entry = self.Entry(**dict(b[key], name=key, app=self.app))
-    #         if schedule.get(key):
-    #             schedule[key].update(entry)
-    #         else:
-    #             schedule[key] = entry
-
-    def _maybe_entry(self, name, entry):
-        if isinstance(entry, self.Entry):
-            entry.app = self.app
-            return entry
-        return self.Entry(scheduler_url=self.schedule_url, **dict(entry, name=name, app=self.app))  # parent : self.Entry(**dict(entry, name=name, app=self.app))
 
     def reserve(self, entry):
         # called when the task is about to be run (and data will be modified -> sync() will need to save it)
@@ -344,7 +263,8 @@ class RedisScheduler(Scheduler):
             while self._dirty:
                 name = self._dirty.pop()
                 _tried.add(name)
-                self.schedule[name].save(name)
+                # Saving the entry back into Redis DB.
+                self.rdb.set(name, self.schedule[name].tojson)
         except Exception as exc:
             # retry later
             self._dirty |= _tried

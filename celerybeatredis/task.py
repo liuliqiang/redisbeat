@@ -80,7 +80,9 @@ class PeriodicTask(object):
     Represents a periodic task.
     This follows the celery.beat.ScheduleEntry class design.
     However it is independent of any celery import, so that any client library can import this module
-    and use it to manipulate periodic tasks into a Redis database, without worrying about all the celery imports.
+     and use it to manipulate periodic tasks into a Redis database, without worrying about all the celery imports.
+    Should follow the SQLAlchemy DBModel design.
+    These are used as delegate from https://github.com/celery/django-celery/blob/master/djcelery/schedulers.py
     """
     name = None
     task = None
@@ -107,21 +109,16 @@ class PeriodicTask(object):
 
     no_changes = False
 
-    #TODO : match with celery.beat.SchedulerEntry:__init__() signature
-    def __init__(self, scheduler_url, name, task, schedule, enabled=True, args=(), kwargs=None, options=None,
+    # Follow celery.beat.SchedulerEntry:__init__() signature as much as possible
+    def __init__(self, name, task, schedule, enabled=True, args=(), kwargs=None, options=None,
                  last_run_at=None, total_run_count=None, **extrakwargs):
-        # TODO : get rid of schduler_url if possible
         """
-
-        :param scheduler_url: the URL of the redic DB where to find the schedule
-        :param name: name of the task (pretty long one)
+        :param name: name of the task ( = redis key )
         :param task: taskname ( as in celery : python function name )
         :param schedule: the schedule. maybe also a dict with all schedule content
         :param relative: if the schedule time needs to be relative to the interval ( see celery.schedules )
-        :param key: the key of this task
-        :param queue: the queue where to send this task (should be in options)
         :param enabled: whether this task is enabled or not
-        :param args: args for hte task
+        :param args: args for the task
         :param kwargs: kwargs for the task
         :param options: options for hte task
         :param last_run_at: lat time the task was run
@@ -133,7 +130,7 @@ class PeriodicTask(object):
         self.enabled = enabled
 
         # Using schedule property conversion
-        logger.warn("Schedule in Task init {s}".format(s=schedule))
+        # logger.warn("Schedule in Task init {s}".format(s=schedule))
         self.schedule = schedule
 
         self.args = args
@@ -144,27 +141,21 @@ class PeriodicTask(object):
         self.total_run_count = total_run_count
 
         self.name = name
-        self.rdb = StrictRedis.from_url(scheduler_url)
 
         # storing extra arguments (might be useful to have other args depending on application)
         for elem in extrakwargs.keys():
             setattr(self, elem, extrakwargs[elem])
 
 
-
     @staticmethod
-    def get_all_as_dict(scheduler_url, key_prefix):
+    def get_all_as_dict(rdb, key_prefix):
         """get all of the tasks, for best performance with large amount of tasks, return a generator
         """
-        rdb = StrictRedis.from_url(scheduler_url)
+
         tasks = rdb.keys(key_prefix + '*')
         for task_key in tasks:
             try:
                 dct = json.loads(rdb.get(task_key), cls=DateTimeDecoder)
-                # task name should always correspond to the key in redis to avoid
-                # issues arising when saving keys - we want to add information to
-                # the current key, not create a new key
-                #dct['key'] = task_key  # TODO : maybe we can get rid of this ?
                 yield task_key, dct
             except json.JSONDecodeError:  # handling bad json format by ignoring the task
                 logger.warning('ERROR Reading json task at %s', task_key)
@@ -181,19 +172,10 @@ class PeriodicTask(object):
         ))
     __next__ = next = _next_instance  # for 2to3
 
-    def delete(self):
-        self.rdb.delete(self.name)
-
-    def save(self, key):
+    def jsondump(self):
         # must do a deepcopy using our custom iterator to choose what to save (matching external view)
-        self_dict = deepcopy({k: v for k, v in iter(self)})
-        self.rdb.set(key, json.dumps(self_dict, cls=DateTimeEncoder))
-
-    # def clean(self):
-    #     """validation to ensure that you have a schedule"""
-    #     if not (self.schedule):
-    #         msg = 'Must define a schedule.'
-    #         raise ValidationError(msg)
+        self_dict = deepcopy({k: v for k, v in iter(self) if v is not None})
+        return json.dumps(self_dict, cls=DateTimeEncoder)
 
     def update(self, other):
         """Update values from another task.
@@ -205,23 +187,6 @@ class PeriodicTask(object):
         self.__dict__.update({'task': other.task, 'schedule': other.schedule,
                               'args': other.args, 'kwargs': other.kwargs,
                               'options': other.options})
-
-    # @staticmethod
-    # def from_dict(d, scheduler_url):
-    #     """
-    #     build PeriodicTask instance from dict
-    #     :param d: dict
-    #     :return: PeriodicTask instance
-    #     """
-    #     # TODO : get rid of this, calling the constructor with **d should be enough
-    #     task = PeriodicTask(scheduler_url, d['name'], d['task'], d['schedule'], d['key'])
-    #     for elem in d:
-    #         if elem not in ('schedule'):
-    #             setattr(task, elem, d[elem])
-    #     return task
-    #
-    # def inject_celery(self, celery_schedules):
-    #         return self.schedule.schedule(celery_schedules)
 
     def __repr__(self):
         return '<PeriodicTask ({0} {1}(*{2}, **{3}) {{4}})>'.format(
@@ -272,5 +237,5 @@ class PeriodicTask(object):
         for k, v in vars(self).iteritems():
             if k == 'data':
                 yield 'schedule', self.schedule
-            elif not k in ['rdb']:  # list the keys we don't want to expose
+            else:  # we can expose everything else
                 yield k, v
