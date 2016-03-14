@@ -24,9 +24,6 @@ class Interval(object):
         # could be seconds minutes hours
         self.period = period
 
-    # def schedule(self, celery_schedules):
-    #     return celery_schedules.schedule(datetime.timedelta(**{self.period: self.every}))
-
     @property
     def period_singular(self):
         return self.period[:-1]
@@ -36,43 +33,22 @@ class Interval(object):
             return 'every {0.period_singular}'.format(self)
         return 'every {0.every} {0.period}'.format(self)
 
-    # @classmethod
-    # def fromdict(cls, d):
-    #     try:
-    #         return cls(d['every'], d.get('period', None))
-    #     except ValueError as exc:
-    #         raise  # not correct json
-
 
 class Crontab(object):
 
-        def __init__(self, minute, hour, day_of_week, day_of_month, month_of_year):
-            self.minute = minute
-            self.hour = hour
-            self.day_of_week = day_of_week
-            self.day_of_month = day_of_month
-            self.month_of_year = month_of_year
+    def __init__(self, minute=0, hour=0, day_of_week=None, day_of_month=None, month_of_year=None):
+        self.minute = minute
+        self.hour = hour
+        self.day_of_week = day_of_week or '*'
+        self.day_of_month = day_of_month or '*'
+        self.month_of_year = month_of_year or '*'
 
-        # def schedule(self, celery_schedules):
-        #     return celery_schedules.crontab(minute=self.minute,
-        #                                     hour=self.hour,
-        #                                     day_of_week=self.day_of_week,
-        #                                     day_of_month=self.day_of_month,
-        #                                     month_of_year=self.month_of_year)
-
-        def __unicode__(self):
-            rfield = lambda f: f and str(f).replace(' ', '') or '*'
-            return '{0} {1} {2} {3} {4} (m/h/d/dM/MY)'.format(
-                rfield(self.minute), rfield(self.hour), rfield(self.day_of_week),
-                rfield(self.day_of_month), rfield(self.month_of_year),
-            )
-
-        # @classmethod
-        # def fromdict(cls, d):
-        #     try :
-        #         return cls(d['minute'], d['hour'], d['day_of_week'], d['day_of_month'], d['month_of_year'])
-        #     except ValueError as exc:
-        #         raise  # not correct json
+    def __unicode__(self):
+        rfield = lambda f: f and str(f).replace(' ', '') or '*'
+        return '{0} {1} {2} {3} {4} (m/h/d/dM/MY)'.format(
+            rfield(self.minute), rfield(self.hour), rfield(self.day_of_week),
+            rfield(self.day_of_month), rfield(self.month_of_year),
+        )
 
 
 class PeriodicTask(object):
@@ -146,7 +122,6 @@ class PeriodicTask(object):
         for elem in extrakwargs.keys():
             setattr(self, elem, extrakwargs[elem])
 
-
     @staticmethod
     def get_all_as_dict(rdb, key_prefix):
         """get all of the tasks, for best performance with large amount of tasks, return a generator
@@ -156,6 +131,7 @@ class PeriodicTask(object):
         for task_key in tasks:
             try:
                 dct = json.loads(rdb.get(task_key), cls=DateTimeDecoder)
+                logger.warning('json task {0}'.format(dct))
                 yield task_key, dct
             except json.JSONDecodeError:  # handling bad json format by ignoring the task
                 logger.warning('ERROR Reading json task at %s', task_key)
@@ -178,13 +154,17 @@ class PeriodicTask(object):
         return json.dumps(self_dict, cls=DateTimeEncoder)
 
     def update(self, other):
-        """Update values from another task.
-
+        """
+        Update values from another task.
+        This is used to dynamically update periodic task from edited redis values
         Does only update "editable" fields (task, schedule, args, kwargs,
         options).
-
         """
-        self.__dict__.update({'task': other.task, 'schedule': other.schedule,
+        # schedule/data is a bit of a special case
+        self.data = other.data
+
+        # do the rest
+        self.__dict__.update({'task': other.task, 'enabled': other.enabled,
                               'args': other.args, 'kwargs': other.kwargs,
                               'options': other.options})
 
