@@ -264,7 +264,7 @@ class RedisScheduler(Scheduler):
                 name = self._dirty.pop()
                 _tried.add(name)
                 # Saving the entry back into Redis DB.
-                self.rdb.set(name, self.schedule[name].tojson)
+                self.rdb.set(name, self.schedule[name].jsondump())
         except Exception as exc:
             # retry later
             self._dirty |= _tried
