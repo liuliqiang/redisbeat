@@ -131,7 +131,7 @@ class PeriodicTask(object):
         for task_key in tasks:
             try:
                 dct = json.loads(rdb.get(task_key), cls=DateTimeDecoder)
-                logger.warning('json task {0}'.format(dct))
+                # logger.warning('json task {0}'.format(dct))
                 yield task_key, dct
             except json.JSONDecodeError:  # handling bad json format by ignoring the task
                 logger.warning('ERROR Reading json task at %s', task_key)

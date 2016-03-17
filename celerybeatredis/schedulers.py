@@ -225,7 +225,7 @@ class RedisScheduler(Scheduler):
         # we need to merge it with whatever schedule was set in config, and already installed default tasks
         try:
             s = self.all_as_schedule()
-            logger.info("Schedule: {s}".format(s=s))
+            logger.debug("Schedule: {s}".format(s=s))
             self.merge_inplace(s)
         except Exception as exc:
             logger.error("Exception when getting tasks from {url} : {exc}".format(url=self.schedule_url, exc=exc))
