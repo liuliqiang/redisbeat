@@ -126,9 +126,9 @@ class RedisScheduleEntry(object):
         """See :meth:`~celery.schedule.schedule.is_due`."""
         due = self.schedule.is_due(self.last_run_at)
 
-        logger.info('task {0} due : {1}'.format(self.name, due))
+        logger.debug('task {0} due : {1}'.format(self.name, due))
         if not self.enabled:
-            logger.info('task {0} disabled'.format(self.name))
+            logger.info('task {0} is disabled. not triggered.'.format(self.name))
             # if the task is disabled, we always return false, but the time that
             # it is next due is returned as usual
             return celery.schedulers.schedstate(is_due=False, next=due[1])
@@ -225,7 +225,6 @@ class RedisScheduler(Scheduler):
         # we need to merge it with whatever schedule was set in config, and already installed default tasks
         try:
             s = self.all_as_schedule()
-            logger.debug("Schedule: {s}".format(s=s))
             self.merge_inplace(s)
         except Exception as exc:
             logger.error("Exception when getting tasks from {url} : {exc}".format(url=self.schedule_url, exc=exc))
@@ -233,7 +232,7 @@ class RedisScheduler(Scheduler):
             raise
 
         # displaying the schedule we got from redis
-        logger.info(self.schedule)
+        logger.debug("DB schedule : {0}".format(self.schedule))
 
         # this will call self.maybe_due() to check if any entry is due.
         return super(RedisScheduler, self).tick()
