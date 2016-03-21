@@ -169,9 +169,9 @@ class PeriodicTask(object):
                               'options': other.options})
 
     def __repr__(self):
-        return '<PeriodicTask ({0} {1}(*{2}, **{3}) {{4}})>'.format(
+        return '<PeriodicTask ({0} {1}(*{2}, **{3}) options: {4} schedule: {5})>'.format(
             self.name, self.task, self.args,
-            self.kwargs, self.schedule,
+            self.kwargs, self.options, self.schedule,
         )
 
     def __unicode__(self):
