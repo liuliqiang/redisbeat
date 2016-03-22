@@ -63,27 +63,18 @@ class PeriodicTask(object):
     name = None
     task = None
 
-    type_ = None
-
     data = None
 
     args = []
     kwargs = {}
     options = {}
 
-    # datetime
-    expires = None
     enabled = True
 
     # datetime
     last_run_at = None
 
     total_run_count = 0
-
-    date_changed = None
-    description = None
-
-    no_changes = False
 
     # Follow celery.beat.SchedulerEntry:__init__() signature as much as possible
     def __init__(self, name, task, schedule, enabled=True, args=(), kwargs=None, options=None,
@@ -157,16 +148,13 @@ class PeriodicTask(object):
         """
         Update values from another task.
         This is used to dynamically update periodic task from edited redis values
-        Does only update "editable" fields (task, schedule, args, kwargs,
-        options).
+        Does not update "non-editable" fields (last_run_at, total_run_count).
+        Extra arguments will be updated (considered editable)
         """
-        # schedule/data is a bit of a special case
-        self.data = other.data
-
-        # do the rest
-        self.__dict__.update({'task': other.task, 'enabled': other.enabled,
-                              'args': other.args, 'kwargs': other.kwargs,
-                              'options': other.options})
+        otherdict = other.__dict__  # note : schedule property is not part of the dict.
+        otherdict.pop('last_run_at')
+        otherdict.pop('total_run_count')
+        self.__dict__.update(otherdict)
 
     def __repr__(self):
         return '<PeriodicTask ({0} {1}(*{2}, **{3}) options: {4} schedule: {5})>'.format(

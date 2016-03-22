@@ -140,6 +140,17 @@ class RedisScheduleEntry(object):
             call=kombu.utils.reprcall(self.task, self.args or (), self.kwargs or {}),
         )
 
+    def update(self, other):
+        """
+        Update values from another entry.
+        This is used to dynamically update periodic entry from edited redis values
+        Does not update "non-editable" fields
+        Extra arguments will be updated (considered editable)
+        """
+        # Handle delegation properly here
+        self._task.update(other._task)
+        # we should never need to touch the app here
+
     #
     # ScheduleEntry needs to be an iterable
     #
