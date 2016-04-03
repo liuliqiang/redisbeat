@@ -132,12 +132,23 @@ class RedisScheduler(Scheduler):
             logger.info('backend scheduler using %s',
                                       current_app.conf.CELERY_REDIS_SCHEDULER_URL)
 
+        # how long we should hold on to the redis lock in seconds
+        if 'CELERY_REDIS_SCHEDULER_LOCK_TTL' in current_app.conf:
+            lock_ttl = current_app.conf.CELERY_REDIS_SCHEDULER_LOCK_TTL
+        else:
+            lock_ttl = 30
+
+        if lock_ttl < self.UPDATE_INTERVAL.seconds:
+            lock_ttl = self.UPDATE_INTERVAL.seconds * 2
+        self.lock_ttl = lock_ttl
+
         self._schedule = {}
         self._last_updated = None
+        self._lock_acquired = False
         Scheduler.__init__(self, *args, **kwargs)
         self.max_interval = (kwargs.get('max_interval') \
                              or self.app.conf.CELERYBEAT_MAX_LOOP_INTERVAL or 300)
-        self._lock = rdb.lock('celery:beat:task_lock')
+        self._lock = rdb.lock('celery:beat:task_lock', timeout=self.lock_ttl)
         self._lock_acquired = self._lock.acquire(blocking=False)
         self.Entry.scheduler = self
 
@@ -158,7 +169,7 @@ class RedisScheduler(Scheduler):
 
         # still cannot get lock
         if not self._lock_acquired:
-            logger.warn('another beat is running, disable this node util it is shutdown')
+            logger.warn('another beat is running, disable this node until it is shutdown')
         return super(RedisScheduler, self).tick()
 
     def get_from_database(self):
@@ -183,6 +194,9 @@ class RedisScheduler(Scheduler):
         if self.requires_update():
             self._schedule = self.get_from_database()
             self._last_updated = datetime.datetime.now()
+            # also extend the lock
+            if self._lock_acquired:
+                self._lock_acquired = rdb.expire(self._lock.name, self.lock_ttl)
         return self._schedule
 
     def sync(self):
