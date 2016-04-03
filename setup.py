@@ -3,7 +3,7 @@ from setuptools import setup
 setup(
     name = "celerybeat-redis",
     description = "A Celery Beat Scheduler that uses Redis to store both schedule definitions and status information",
-    version = "0.1.3",
+    version = "0.1.5",
     license = "Apache License, Version 2.0",
     author = "Kong Luoxing",
     author_email = "kong.luoxing@gmail.com",
@@ -19,9 +19,8 @@ setup(
 
     install_requires=[
         'setuptools',
-        'redis',
-        'celery',
-        'simplejson',
+        'redis>=2.10.3',
+        'celery>=3.1.16'
     ]
 
 )

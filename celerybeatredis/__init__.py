@@ -1,7 +1,12 @@
 from __future__ import absolute_import
 
-from .schedulers import PeriodicTask
+from .task import PeriodicTask, Crontab, Interval
+from .schedulers import RedisScheduler, RedisScheduleEntry
 
 __all__ = [
-    'PeriodicTask'
+    'PeriodicTask',
+    'Crontab',
+    'Interval'
+    'RedisScheduler',
+    'RedisScheduleEntry'
 ]
