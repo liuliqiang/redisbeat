@@ -15,7 +15,8 @@ except ImportError:
 import celery.schedules
 
 from .decoder import DateTimeDecoder, DateTimeEncoder
-from .globals import rdb, bytes_to_str, default_encoding
+from .exceptions import ValidationError
+from .globals import rdb, bytes_to_str, default_encoding, logger
 
 
 class PeriodicTask(object):
@@ -65,6 +66,7 @@ class PeriodicTask(object):
 
         self.name = name
         self.key = key
+        self.delete_key = 'deleted:' + bytes_to_str(self.key)
 
         self.running = False
 
@@ -129,7 +131,9 @@ class PeriodicTask(object):
                 logger.warning('ERROR Reading task value at %s', task_key)
 
     def delete(self):
-        rdb.delete(self.name)
+        # this is eventually consistent
+        rdb.set(self.delete_key, 'deleted')
+        rdb.delete(self.key)
 
     def save(self):
         # must do a deepcopy
@@ -141,7 +145,19 @@ class PeriodicTask(object):
 
         # remove the key from the dict so we don't save it into the redis
         del self_dict['key']
-        rdb.set(self.key, json.dumps(self_dict, cls=DateTimeEncoder))
+        # only save if the task wasn't deleted
+        to_be_deleted = rdb.exists(self.delete_key)
+        actually_deleted = (not rdb.exists(bytes_to_str(self.key)) and
+                            to_be_deleted)
+        if actually_deleted:
+            rdb.delete(self.delete_key)
+            return False
+
+        if not to_be_deleted:
+            rdb.set(self.key, json.dumps(self_dict, cls=DateTimeEncoder))
+            return True
+        else:
+            return False
 
     def clean(self):
         """validation to ensure that you only have

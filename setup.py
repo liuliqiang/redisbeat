@@ -20,7 +20,8 @@ setup(
     install_requires=[
         'setuptools',
         'redis',
-        'celery'
+        'celery',
+        'simplejson',
     ]
 
 )
