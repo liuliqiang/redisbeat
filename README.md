@@ -33,12 +33,25 @@ similar to how other aspects of Celery are configured
     CELERY_REDIS_SCHEDULER_URL = "redis://localhost:6379/1"
     CELERY_REDIS_SCHEDULER_KEY_PREFIX = 'tasks:meta:'
 
-You mush make these two value configured. `CELERY_REDIS_SCHEDULER_URL` is used
-to store tasks. `CELERY_REDIS_SCHEDULER_KEY_PREFIX` is used to generate keys in
-redis. The key was like
+You must make sure these two values are configured. `CELERY_REDIS_SCHEDULER_URL`
+is used to store tasks. `CELERY_REDIS_SCHEDULER_KEY_PREFIX` is used to generate
+keys in redis. The keys will be of the form
 
     tasks:meta:task-name-here
     tasks:meta:test-fib-every-3s
+
+There is also an optional setting 
+
+    CELERY_REDIS_SCHEDULER_LOCK_TTL = 30
+
+This value determines how long the redis scheduler will hold on to it's lock,
+which prevents multiple beat instances from running at the same time. However,
+in some cases -- such as a hard crash -- celery beat will not be able to clean
+up after itself and release the lock. Therefore, the lock is given a
+configurable time-to-live, after which it will expire and be released, if it is
+not renewed by the beat instance that acquired it. If said beat instance does
+die, another instance will be able to pick up the baton, as it were, and run
+instead.
 
 # Quickstart
 
