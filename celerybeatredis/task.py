@@ -4,18 +4,13 @@
 # Licensed under the Apache License, Version 2.0 (the 'License'); you may not
 # use this file except in compliance with the License. You may obtain a copy
 # of the License at http://www.apache.org/licenses/LICENSE-2.0
+import celery.schedules
 import datetime
-from copy import deepcopy
-from redis import StrictRedis
-
-try:
-    import simplejson as json
-except ImportError:
-    import json
+import json
 
 from .decoder import DateTimeDecoder, DateTimeEncoder
-from .exceptions import ValidationError
-from .globals import rdb, bytes_to_str, default_encoding, logger
+from .exceptions import TaskTypeError
+from .globals import bytes_to_str, default_encoding, logger
 
 
 class Interval(object):
@@ -78,7 +73,7 @@ class PeriodicTask(object):
     total_run_count = 0
 
     # Follow celery.beat.SchedulerEntry:__init__() signature as much as possible
-    def __init__(self, name, task, schedule, enabled=True, args=(), kwargs=None, options=None,
+    def __init__(self, name, task, schedule, key=None, enabled=True, args=(), kwargs=None, options=None,
                  last_run_at=None, total_run_count=None, **extrakwargs):
         """
         :param name: name of the task ( = redis key )
@@ -109,7 +104,7 @@ class PeriodicTask(object):
         self.total_run_count = total_run_count
 
         self.name = name
-        self.key = key
+        self.key = key if key else self.name
         self.delete_key = 'deleted:' + bytes_to_str(self.key)
 
         self.running = False
@@ -130,62 +125,9 @@ class PeriodicTask(object):
                 # task name should always correspond to the key in redis to avoid
                 # issues arising when saving keys - we want to add information to
                 # the current key, not create a new key
-                dct['key'] = task_key
-                yield dct
-            except json.JSONDecodeError:  # handling bad json format by ignoring the task
-                logger.warning('ERROR Reading task value at %s', task_key)
-
-    def delete(self):
-        # this is eventually consistent
-        rdb.set(self.delete_key, 'deleted')
-        rdb.delete(self.key)
-
-    def save(self):
-        # must do a deepcopy
-        self_dict = deepcopy(self.__dict__)
-        if self_dict.get('interval'):
-            self_dict['interval'] = self.interval.__dict__
-        if self_dict.get('crontab'):
-            self_dict['crontab'] = self.crontab.__dict__
-
-        # remove the key from the dict so we don't save it into the redis
-        del self_dict['key']
-        # only save if the task wasn't deleted
-        to_be_deleted = rdb.exists(self.delete_key)
-        actually_deleted = (not rdb.exists(bytes_to_str(self.key)) and
-                            to_be_deleted)
-        if actually_deleted:
-            rdb.delete(self.delete_key)
-            return False
-
-        if not to_be_deleted:
-            rdb.set(self.key, json.dumps(self_dict, cls=DateTimeEncoder))
-            return True
-        else:
-            return False
-
-    def clean(self):
-        """validation to ensure that you only have
-        an interval or crontab schedule, but not both simultaneously"""
-        if self.interval and self.crontab:
-            msg = 'Cannot define both interval and crontab schedule.'
-            raise ValidationError(msg)
-        if not (self.interval or self.crontab):
-            msg = 'Must defined either interval or crontab schedule.'
-            raise ValidationError(msg)
-
-    @staticmethod
-    def from_dict(d):
-        """
-        Update values from another task.
-        This is used to dynamically update periodic task from edited redis values
-        Does not update "non-editable" fields (last_run_at, total_run_count).
-        Extra arguments will be updated (considered editable)
-        """
-        otherdict = other.__dict__  # note : schedule property is not part of the dict.
-        otherdict.pop('last_run_at')
-        otherdict.pop('total_run_count')
-        self.__dict__.update(otherdict)
+                yield task_key, dct
+            except ValueError:  # handling bad json format by ignoring the task
+                logger.warning('ERROR Reading json task at %s', task_key)
 
     def __repr__(self):
         return '<PeriodicTask ({0} {1}(*{2}, **{3}) options: {4} schedule: {5})>'.format(
@@ -209,18 +151,27 @@ class PeriodicTask(object):
         schedule dict -> Interval / Crontab if needed
         :return:
         """
-        if isinstance(schedule, Interval) or isinstance(schedule, Crontab):
+        if schedule is None:
+            pass
+        elif isinstance(schedule, Interval) or isinstance(schedule, Crontab):
             self.data = schedule
+        elif isinstance(schedule, celery.schedules.crontab):
+            self.data = Crontab(schedule.minute, schedule.hour,
+                                schedule.day_of_week, schedule.day_of_month, schedule.month_of_year)
+        elif isinstance(schedule, celery.schedules.schedule)\
+                or isinstance(schedule, datetime.timedelta):
+            self.data = Interval(schedule.seconds)
         else:
             schedule_inst = None
             for s in [Interval, Crontab]:
                 try:
                     schedule_inst = s(**schedule)
                 except TypeError as typexc:
+                    logger.warn("Create schedule failed. {}".format(schedule.__class__))
                     pass
 
             if schedule_inst is None:
-                raise Exception(logger.warn("Schedule {s} didn't match Crontab or Interval type".format(s=schedule)))
+                raise TaskTypeError("Schedule {s} didn't match Crontab or Interval type".format(s=schedule))
             else:
                 self.data = schedule_inst
 

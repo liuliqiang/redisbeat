@@ -8,3 +8,7 @@
 
 class ValidationError(Exception):
     pass
+
+
+class TaskTypeError(Exception):
+    pass
