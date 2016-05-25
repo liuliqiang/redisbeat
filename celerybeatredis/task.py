@@ -4,9 +4,15 @@
 # Licensed under the Apache License, Version 2.0 (the 'License'); you may not
 # use this file except in compliance with the License. You may obtain a copy
 # of the License at http://www.apache.org/licenses/LICENSE-2.0
-import celery.schedules
 import datetime
-import json
+from copy import deepcopy
+from redis import StrictRedis
+import celery
+
+try:
+    import simplejson as json
+except ImportError:
+    import json
 
 from .decoder import DateTimeDecoder, DateTimeEncoder
 from .exceptions import TaskTypeError
@@ -69,12 +75,13 @@ class PeriodicTask(object):
 
     # datetime
     last_run_at = None
+    last_task_id = None
 
     total_run_count = 0
 
     # Follow celery.beat.SchedulerEntry:__init__() signature as much as possible
     def __init__(self, name, task, schedule, key=None, enabled=True, args=(), kwargs=None, options=None,
-                 last_run_at=None, total_run_count=None, **extrakwargs):
+                 last_run_at=None, last_task_id=None, total_run_count=None, **extrakwargs):
         """
         :param name: name of the task ( = redis key )
         :param task: taskname ( as in celery : python function name )
@@ -85,6 +92,7 @@ class PeriodicTask(object):
         :param kwargs: kwargs for the task
         :param options: options for hte task
         :param last_run_at: lat time the task was run
+        :param last_task_id: the last id otf the task triggered by this periodic task
         :param total_run_count: total number of times the task was run
         :return:
         """
@@ -101,6 +109,7 @@ class PeriodicTask(object):
         self.options = options or {}
 
         self.last_run_at = last_run_at
+        self.last_task_id = last_task_id
         self.total_run_count = total_run_count
 
         self.name = name
@@ -125,9 +134,40 @@ class PeriodicTask(object):
                 # task name should always correspond to the key in redis to avoid
                 # issues arising when saving keys - we want to add information to
                 # the current key, not create a new key
+                # logger.warning('json task {0}'.format(dct))
                 yield task_key, dct
-            except ValueError:  # handling bad json format by ignoring the task
+            except json.JSONDecodeError:  # handling bad json format by ignoring the task
                 logger.warning('ERROR Reading json task at %s', task_key)
+
+    def _next_instance(self, last_run_at):
+        self.last_run_at = last_run_at
+        self.total_run_count += 1
+        """Return a new instance of the same class, but with
+        its date and count fields updated."""
+        return self.__class__(**dict(
+            self,
+            last_run_at=last_run_at,
+            total_run_count=self.total_run_count + 1,
+        ))
+    __next__ = next = _next_instance  # for 2to3
+
+    def jsondump(self):
+        # must do a deepcopy using our custom iterator to choose what to save (matching external view)
+        self_dict = deepcopy({k: v for k, v in iter(self) if v is not None})
+        return json.dumps(self_dict, cls=DateTimeEncoder)
+
+    def update(self, other):
+        """
+        Update values from another task.
+        This is used to dynamically update periodic task from edited redis values
+        Does not update "non-editable" fields (last_run_at, total_run_count).
+        Extra arguments will be updated (considered editable)
+        """
+        otherdict = other.__dict__  # note : schedule property is not part of the dict.
+        otherdict.pop('last_run_at')
+        otherdict.pop('last_task_id')
+        otherdict.pop('total_run_count')
+        self.__dict__.update(otherdict)
 
     def __repr__(self):
         return '<PeriodicTask ({0} {1}(*{2}, **{3}) options: {4} schedule: {5})>'.format(
