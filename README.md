@@ -1,3 +1,9 @@
+# Project Status
+
+Because of the busy of work, I doesn't got much time on this time, and one major reason is now I am programming with Java...
+So I won't push any new release from now on, if someone is interest with it, just fork and maintenance your own version,
+Sorry for the inconvenient.
+
 # celerybeat-redis
 
 It's modified from celerybeat-mongo (https://github.com/zakird/celerybeat-mongo)
