@@ -17,17 +17,17 @@ from celery import current_app
 from celery.utils.log import get_logger
 
 logger  = get_logger(__name__)
-debug, linfo, error, warning = (logger.debug, logger.info,
-                               logger.error, logger.warning)
+debug, linfo, error, warning = (logger.debug, logger.info, logger.error,
+                                logger.warning)
 
 
 class RedisScheduler(Scheduler):
     def __init__(self, *args, **kwargs):
         app = kwargs['app']
         self.key = app.conf.get("CELERY_REDIS_SCHEDULER_KEY",
-                                        "celery:beat:order_tasks")
+                                "celery:beat:order_tasks")
         self.schedule_url = app.conf.get("CELERY_REDIS_SCHEDULER_URL",
-                                                 "redis://localhost:6379")
+                                         "redis://localhost:6379")
         self.rdb = StrictRedis.from_url(self.schedule_url)
         Scheduler.__init__(self, *args, **kwargs)
 
