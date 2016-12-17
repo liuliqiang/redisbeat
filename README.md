@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 # Project Status
 
 Because of the busy of work, I doesn't got much time on this time, and one major reason is now I am programming with Java...
@@ -14,11 +15,19 @@ See Changelog in [CHANGES.md](./CHANGES.md)
 This is a Celery Beat Scheduler (http://celery.readthedocs.org/en/latest/userguide/periodic-tasks.html)
 that stores both the schedules themselves and their status
 information in a backend Redis database.
+=======
+# Introduction
+
+Using redis as celery scheduler task storage and beat by reading task from redis.
+
+So you can add or remove task dynamic while celery beat is runing and no need to restart celery. And you can add scheduler task dynamic when you need to add schedule task.
+>>>>>>> 865c6da4e0f4e26b5e10b40834cb3e04246915ef
 
 # Features
 
 1. Full-featured celery-beat scheduler
 2. Dynamically add/remove/modify tasks
+<<<<<<< HEAD
 3. Support multiple instance by Active-Standby model
 
 # Installation
@@ -230,3 +239,53 @@ this time.
 # celerybeatredis
 Redis Scheduler For Celery, Support Add and Update Task Dynamic
 >>>>>>> c0680c7c72cbe4350428ed271d82e8edb1d3617f
+=======
+3. Original celery scheduler config, no need to change scheduler configs
+4. Support multiple instance by Active-Standby model
+
+# Installation
+
+Install redisbeat is so easy, you can using setuptools or pip.
+
+Simplily, you can just instlal by pip package tool:
+
+    # pip install redisbeat
+
+or maybe you can use source install by clone codes:
+
+	# git clone https://github.com/yetship/celerybeatredis.git
+	# cd celerybeatredis
+	# python setup.py install
+
+# Usage
+
+After you install celerybeatredis, you can jsut using it in celery by beat easily:
+
+```bash
+# celery -A tasks beat -s redisbeat.RedisScheduler
+```
+
+# Configuration
+
+Config by using redis beat is the same to origin celery config, as an schedule beat, you can config as following:
+
+```python
+#encoding: utf-8
+from datetime import timedelta
+from celery.schedules import crontab
+from celery import Celery
+
+app = Celery('tasks', backend='redis://localhost:6379',
+             broker='redis://localhost:6379')
+
+app.conf.update(
+    CELERYBEAT_SCHEDULE={
+        'perminute': {
+            'task': 'tasks.add',
+            'schedule': timedelta(seconds=3),
+            'args': (1, 1)
+        }
+    }
+)
+```
+>>>>>>> 865c6da4e0f4e26b5e10b40834cb3e04246915ef
