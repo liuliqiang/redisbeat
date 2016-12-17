@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Project Status
 
 Because of the busy of work, I doesn't got much time on this time, and one major reason is now I am programming with Java...
@@ -225,3 +226,7 @@ ticking, it will acquire the lock and continue to run.
 
 WARNING: this is an experiment feature, need more test, not production ready at
 this time.
+=======
+# celerybeatredis
+Redis Scheduler For Celery, Support Add and Update Task Dynamic
+>>>>>>> c0680c7c72cbe4350428ed271d82e8edb1d3617f
