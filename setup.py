@@ -1,24 +1,3 @@
-<<<<<<< HEAD
-from setuptools import setup
-
-setup(
-    name = "celerybeat-redis",
-    description = "A Celery Beat Scheduler that uses Redis to store both schedule definitions and status information",
-    version = "0.1.5",
-    license = "Apache License, Version 2.0",
-    author = "Kong Luoxing",
-    author_email = "kong.luoxing@gmail.com",
-    home_page = 'https://github.com/kongluoxing/celerybeatredis',
-    maintainer = "Kong Luoxing",
-    maintainer_email = "kong.luoxing@gmail.com",
-
-    keywords = "python celery beat redis",
-
-    packages = [
-        "celerybeatredis"
-    ],
-
-=======
 #!/usr/bin/env python
 try:
     from setuptools import find_packages, setup
@@ -94,23 +73,4 @@ setup(
     # your project is installed. For an analysis of "install_requires" vs pip's
     # requirements files see:
     # https://packaging.python.org/en/latest/requirements.html
->>>>>>> 865c6da4e0f4e26b5e10b40834cb3e04246915ef
-    install_requires=[
-        'setuptools',
-        'redis>=2.10.3',
-        'celery>=3.1.16'
-<<<<<<< HEAD
-    ]
-
-=======
-    ],
-
-    # List additional groups of dependencies here (e.g. development
-    # dependencies). You can install these using the following syntax,
-    # for example:
-    # $ pip install -e .[dev,test]
-    extras_require={
-        'test': ['coverage', 'nosetests'],
-    },
->>>>>>> 865c6da4e0f4e26b5e10b40834cb3e04246915ef
 )
