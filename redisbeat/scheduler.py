@@ -8,6 +8,7 @@ import sys
 import pickle
 import traceback
 from time import mktime
+from functools import partial
 
 from celery.five import values
 from celery.beat import Scheduler
@@ -30,6 +31,7 @@ class RedisScheduler(Scheduler):
                                          "redis://localhost:6379")
         self.rdb = StrictRedis.from_url(self.schedule_url)
         Scheduler.__init__(self, *args, **kwargs)
+        app.add_task = partial(self.add, self)
 
     def _remove_db(self):
         self.rdb.delete(self.key)
@@ -65,6 +67,7 @@ class RedisScheduler(Scheduler):
 
     def tick(self):
         if not self.rdb.exists(self.key):
+            logger.warn("key: {} not in rdb".format(self.key))
             for e in values(self.schedule):
                 self.rdb.zadd(self.key, self._when(e, e.is_due()[1]) or 0, pickle.dumps(e))
 

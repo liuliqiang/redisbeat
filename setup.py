@@ -25,7 +25,7 @@ setup(
     long_description="",
 
     # The project's main homepage.
-    url="https://github.com/luke0922/celerybeatredis",
+    url="https://github.com/luke0922/redisbeat",
 
     # Author details
     author = "Tyrael Lau",
