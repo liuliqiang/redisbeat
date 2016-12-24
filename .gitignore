@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 *.pyc
 .*
 =======
@@ -91,4 +90,8 @@ ENV/
 
 # Rope project settings
 .ropeproject
->>>>>>> c0680c7c72cbe4350428ed271d82e8edb1d3617f
+*.log
+*.out
+*.pid
+*.rdb
+*.db
