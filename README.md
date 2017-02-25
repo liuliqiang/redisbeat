@@ -134,3 +134,14 @@ CELERYBEAT_SCHEDULE = {
     }
 }
 ```
+
+### Multiple node support
+
+For running `redisbeat` in multi node deployment, it uses redis lock to prevent same task to be executed mutiple times.
+
+```python
+CELERY_REDIS_MULTI_NODE_MODE = True
+CELERY_REDIS_SCHEDULER_LOCK_TTL = 30
+```
+
+This is an experimental feature, to use `redisbeat` in production env, set `CELERY_REDIS_MULTI_NODE_MODE = False`, `redisbeat` will not use this feature.
