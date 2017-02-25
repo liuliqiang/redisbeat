@@ -1,6 +1,6 @@
 # Introduction
 
-`redisbeat` is a [Celery Beat Scheduler](http://celery.readthedocs.org/en/latest/userguide/periodic-tasks.html) that stores periodic tasks and their status in a [Redis Datastore](redis.io).
+`redisbeat` is a [Celery Beat Scheduler](http://celery.readthedocs.org/en/latest/userguide/periodic-tasks.html) that stores periodic tasks and their status in a [Redis Datastore](https://redis.io/).
 
 Tasks can be added, removed or modified without restarting celery using `redisbeat`.
 
