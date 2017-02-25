@@ -7,11 +7,10 @@ except ImportError:
 from codecs import open
 from os import path
 
-here = path.abspath(path.dirname(__file__))
-
 # Get the long description from the README file
-with open(path.join(here, 'README.md'), encoding='utf-8') as f:
-    long_description = f.read()
+long_desc = """
+to be done!
+"""
 
 setup(
     name = "redisbeat",
@@ -19,18 +18,18 @@ setup(
     # Versions should comply with PEP440.  For a discussion on single-sourcing
     # the version across setup.py and the project code, see
     # https://packaging.python.org/en/latest/single_source_version.html
-    version = "0.1.0",
+    version = "1.0.0",
 
     description = "Redis Scheduler For Celery, Support Add Task Dynamic",
     long_description="",
 
     # The project's main homepage.
-    url="https://github.com/luke0922/redisbeat",
+    url="https://github.com/yetship/celerybeatredis",
 
     # Author details
-    author = "Tyrael Lau",
+    author = "Yetship",
     author_email = "liqianglau@outlook.com",
-    home_page = 'https://liuliqiang.info',
+    home_page = 'https://liuliqiang.info/opensource/redisbeat',
 
     # Choose your license
     license='MIT',
