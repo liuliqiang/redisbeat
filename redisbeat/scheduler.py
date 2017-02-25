@@ -16,6 +16,7 @@ from redis import StrictRedis
 from celery import current_app
 
 from celery.utils.log import get_logger
+from redis.exceptions import LockError
 
 logger  = get_logger(__name__)
 debug, linfo, error, warning = (logger.debug, logger.info, logger.error,
@@ -32,6 +33,14 @@ class RedisScheduler(Scheduler):
         self.rdb = StrictRedis.from_url(self.schedule_url)
         Scheduler.__init__(self, *args, **kwargs)
         app.add_task = partial(self.add, self)
+
+        self.multi_node = app.conf.get("CELERY_REDIS_MULTI_NODE_MODE", False)
+        # how long we should hold on to the redis lock in seconds
+        if self.multi_node:
+            self.lock_ttl = current_app.conf.get("CELERY_REDIS_SCHEDULER_LOCK_TTL", 30)
+            self._lock_acquired = False
+            self._lock = self.rdb.lock('celery:beat:task_lock', timeout=self.lock_ttl)
+            self._lock_acquired = self._lock.acquire(blocking=False)
 
     def _remove_db(self):
         self.rdb.delete(self.key)
@@ -107,6 +116,11 @@ class RedisScheduler(Scheduler):
 
     def close(self):
         # 在轮询结束时会被调用
+        if self.multi_node:
+            try:
+                self._lock.release()
+            except LockError:
+                pass
         self.sync()
 
     @property

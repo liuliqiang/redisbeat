@@ -6,10 +6,6 @@ CELERYBEAT_SCHEDULE = {
     'add-every-3-seconds': {
         'task': 'tasks.add',
         'schedule': timedelta(seconds=3),
-<<<<<<< HEAD
         'args': (16, 16)
-=======
-        'args': (1, 1)
->>>>>>> 865c6da4e0f4e26b5e10b40834cb3e04246915ef
     },
 }
