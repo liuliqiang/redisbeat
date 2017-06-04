@@ -18,7 +18,7 @@ from celery import current_app
 from celery.utils.log import get_logger
 from redis.exceptions import LockError
 
-logger  = get_logger(__name__)
+logger = get_logger(__name__)
 debug, linfo, error, warning = (logger.debug, logger.info, logger.error,
                                 logger.warning)
 
@@ -99,7 +99,7 @@ class RedisScheduler(Scheduler):
                     result = self.apply_async(entry)
                 except Exception as exc:
                     error('Message Error: %s\n%s',
-                        exc, traceback.format_stack(), exc_info=True)
+                          exc, traceback.format_stack(), exc_info=True)
                 else:
                     debug('%s sent. id->%s', entry.task, result.id)
                 self.rdb.zrem(self.key, task)
@@ -115,7 +115,7 @@ class RedisScheduler(Scheduler):
         return min(next_times)
 
     def close(self):
-        # 在轮询结束时会被调用
+        # it would be call after cycle end
         if self.multi_node:
             try:
                 self._lock.release()
@@ -125,5 +125,5 @@ class RedisScheduler(Scheduler):
 
     @property
     def info(self):
-        # 返回这个 Scheduler 的信息
+        # return infomation about Schedule
         return '    . db -> {self.schedule_url}, key -> {self.key}'.format(self=self)
