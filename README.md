@@ -29,14 +29,31 @@ or you can install from source by cloning this repository:
 
 After you have installed `redisbeat`, you can easily start with following steps:
 
+This is a demo for exmaple, you can check the code in `example` directory
+
 1. start celery worker
 
-        $ celery worker -A tasks -l info
+    ```
+    $ celery worker -A tasks -l info
+    ```
 
 2. start the celery beat with `RedisScheduler` as scheduler:
 
-        $ celery beat- A tasks -S redisbeat.RedisScheduler
+    ```
+    $ celery beat -A tasks -S redisbeat.RedisScheduler
+    ```
 
+3. dynamic add the task `sub`
+
+    ```
+    $ python add_task.py
+    ```
+
+4. dynamic remove the task `sub`
+
+    ```
+    $ python rem_task.py
+    ```
 
 # Configuration
 
