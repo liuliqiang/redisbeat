@@ -4,8 +4,6 @@ try:
 except ImportError:
     from distutils.core import setup, find_packages
 # To use a consistent encoding
-from codecs import open
-from os import path
 
 # Get the long description from the README file
 long_desc = """
@@ -13,23 +11,23 @@ to be done!
 """
 
 setup(
-    name = "redisbeat",
+    name="redisbeat",
 
     # Versions should comply with PEP440.  For a discussion on single-sourcing
     # the version across setup.py and the project code, see
     # https://packaging.python.org/en/latest/single_source_version.html
-    version = "1.0.0",
+    version="1.0.2",
 
-    description = "Redis Scheduler For Celery, Support Add Task Dynamic",
+    description="Redis Scheduler For Celery, Support Add Task Dynamic",
     long_description="",
 
     # The project's main homepage.
     url="https://github.com/yetship/celerybeatredis",
 
     # Author details
-    author = "Yetship",
-    author_email = "liqianglau@outlook.com",
-    home_page = 'https://liuliqiang.info/opensource/redisbeat',
+    author="Yetship",
+    author_email="liqianglau@outlook.com",
+    home_page='https://liuliqiang.info/opensource/redisbeat',
 
     # Choose your license
     license='MIT',

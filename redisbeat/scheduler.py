@@ -74,6 +74,9 @@ class RedisScheduler(Scheduler):
         self.rdb.zadd(self.key, self._when(e, e.is_due()[1]) or 0, pickle.dumps(e))
         return True
 
+    def remove(self, task_key):
+        self.rdb.zrem(self.key, task_key)
+
     def tick(self):
         if not self.rdb.exists(self.key):
             logger.warn("key: {} not in rdb".format(self.key))
