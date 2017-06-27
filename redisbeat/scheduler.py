@@ -43,6 +43,7 @@ class RedisScheduler(Scheduler):
             self._lock_acquired = self._lock.acquire(blocking=False)
 
     def _remove_db(self):
+        linfo("remove db now")
         self.rdb.delete(self.key)
 
     def _when(self, entry, next_time_to_run):
@@ -50,16 +51,35 @@ class RedisScheduler(Scheduler):
 
     def setup_schedule(self):
         # init entries
-        self.rdb.delete(self.key)
         self.merge_inplace(self.app.conf.CELERYBEAT_SCHEDULE)
-        tasks = self.rdb.zrangebyscore(self.key, 0, sys.maxint)
-        debug('Current schedule:\n' + '\n'.join(
+        tasks = self.rdb.zrangebyscore(self.key, 0, -1)
+        linfo('Current schedule:\n' + '\n'.join(
             repr(pickle.loads(entry)) for entry in tasks))
 
     def merge_inplace(self, tasks):
+        old_entries = self.rdb.zrangebyscore(self.key, 0, sys.maxint, withscores=True)
+        old_entries_dict = dict({})
+        for task, score in old_entries:
+            entry = pickle.loads(task)
+            old_entries_dict[entry.name] = (entry, score)
+        debug("old_entries: {}".format(old_entries_dict))
+
+        self.rdb.delete(self.key)
+
         for key in tasks:
+            last_run_at = 0
             e = self.Entry(**dict(tasks[key], name=key, app=self.app))
-            self.rdb.zadd(self.key, self._when(e, e.is_due()[1]) or 0, pickle.dumps(e))
+            if key in old_entries_dict:
+                # replace entry and remain old score
+                last_run_at = old_entries_dict[key][1]
+                del old_entries_dict[key]
+            self.rdb.zadd(self.key, min(last_run_at, self._when(e, e.is_due()[1]) or 0), pickle.dumps(e))
+        debug("old_entries: {}".format(old_entries_dict))
+        for key, tasks in old_entries_dict.items():
+            debug("key: {}".format(key))
+            debug("tasks: {}".format(tasks))
+            debug("zadd: {}".format(self.rdb.zadd(self.key, tasks[1], pickle.dumps(tasks[0]))))
+        debug(self.rdb.zrange(self.key, 0, -1))
 
     def is_due(self, entry):
         return entry.is_due()
