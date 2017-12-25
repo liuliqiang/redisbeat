@@ -21,6 +21,11 @@ from redis.exceptions import LockError
 logger = get_logger(__name__)
 debug, linfo, error, warning = (logger.debug, logger.info, logger.error,
                                 logger.warning)
+try:
+    MAXINT = sys.maxint
+except AttributeError:
+    # python3
+    MAXINT = sys.maxsize
 
 
 class RedisScheduler(Scheduler):
@@ -57,7 +62,7 @@ class RedisScheduler(Scheduler):
             repr(pickle.loads(entry)) for entry in tasks))
 
     def merge_inplace(self, tasks):
-        old_entries = self.rdb.zrangebyscore(self.key, 0, sys.maxint, withscores=True)
+        old_entries = self.rdb.zrangebyscore(self.key, 0, MAXINT, withscores=True)
         old_entries_dict = dict({})
         for task, score in old_entries:
             entry = pickle.loads(task)
@@ -128,7 +133,7 @@ class RedisScheduler(Scheduler):
                 self.rdb.zrem(self.key, task)
                 self.rdb.zadd(self.key, self._when(next_entry, next_time_to_run) or 0, pickle.dumps(next_entry))
 
-        next_task = self.rdb.zrangebyscore(self.key, 0, sys.maxint, withscores=True, num=1, start=0)
+        next_task = self.rdb.zrangebyscore(self.key, 0, MAXINT, withscores=True, num=1, start=0)
         if not next_task:
             linfo("no next task found")
             return min(next_times)
