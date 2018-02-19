@@ -16,18 +16,18 @@ setup(
     # Versions should comply with PEP440.  For a discussion on single-sourcing
     # the version across setup.py and the project code, see
     # https://packaging.python.org/en/latest/single_source_version.html
-    version="1.0.3",
+    version="1.0.5",
 
     description="Redis Scheduler For Celery, Support Add Task Dynamic",
     long_description="",
 
     # The project's main homepage.
-    url="https://github.com/yetship/celerybeatredis",
+    url="https://liqiang.io/opensource/redisbeat",
 
     # Author details
-    author="Yetship",
+    author="Liqiang Liu",
     author_email="liqianglau@outlook.com",
-    home_page='https://liuliqiang.info/opensource/redisbeat',
+    home_page='https://liqiang.io/opensource/redisbeat',
 
     # Choose your license
     license='MIT',
