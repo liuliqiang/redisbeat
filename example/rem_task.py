@@ -7,4 +7,5 @@ from tasks import app
 
 if __name__ == "__main__":
     schduler = RedisScheduler(app=app)
-    schduler.remove('sub-perminute')
+    result = schduler.remove('sub-perminute')
+    print("rem result: ", result)

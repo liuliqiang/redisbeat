@@ -1,0 +1,10 @@
+amqp==2.3.2
+billiard==3.5.0.5
+celery==4.2.1
+jsonpickle==1.0
+kombu==4.2.2
+pytz==2018.7
+redis==3.0.1
+redisbeat==1.0.7
+vine==1.1.4
+wheel==0.24.0

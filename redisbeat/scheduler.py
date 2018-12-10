@@ -5,16 +5,15 @@
 # use this file except in compliance with the License. You may obtain a copy
 # of the License at http://www.apache.org/licenses/LICENSE-2.0
 import sys
-import pickle
 import traceback
 from time import mktime
 from functools import partial
 
+import jsonpickle
 from celery.five import values
 from celery.beat import Scheduler
 from redis import StrictRedis
 from celery import current_app
-
 from celery.utils.log import get_logger
 from redis.exceptions import LockError
 
@@ -59,13 +58,16 @@ class RedisScheduler(Scheduler):
         self.merge_inplace(self.app.conf.CELERYBEAT_SCHEDULE)
         tasks = self.rdb.zrangebyscore(self.key, 0, -1)
         linfo('Current schedule:\n' + '\n'.join(
-            repr(pickle.loads(entry)) for entry in tasks))
+            repr(jsonpickle.encode(entry)) for entry in tasks))
 
     def merge_inplace(self, tasks):
         old_entries = self.rdb.zrangebyscore(self.key, 0, MAXINT, withscores=True)
         old_entries_dict = dict({})
         for task, score in old_entries:
-            entry = pickle.loads(task)
+            if not task:
+                break
+            debug("ready to loads old entry: ", str(task))
+            entry = jsonpickle.decode(task)
             old_entries_dict[entry.name] = (entry, score)
         debug("old_entries: {}".format(old_entries_dict))
 
@@ -78,12 +80,12 @@ class RedisScheduler(Scheduler):
                 # replace entry and remain old score
                 last_run_at = old_entries_dict[key][1]
                 del old_entries_dict[key]
-            self.rdb.zadd(self.key, min(last_run_at, self._when(e, e.is_due()[1]) or 0), pickle.dumps(e))
+            self.rdb.zadd(self.key, {jsonpickle.encode(e): min(last_run_at, self._when(e, e.is_due()[1]) or 0)})
         debug("old_entries: {}".format(old_entries_dict))
         for key, tasks in old_entries_dict.items():
             debug("key: {}".format(key))
             debug("tasks: {}".format(tasks))
-            debug("zadd: {}".format(self.rdb.zadd(self.key, tasks[1], pickle.dumps(tasks[0]))))
+            debug("zadd: {}".format(self.rdb.zadd(self.key, {jsonpickle.encode(tasks[0]): tasks[1]})))
         debug(self.rdb.zrange(self.key, 0, -1))
 
     def is_due(self, entry):
@@ -96,17 +98,24 @@ class RedisScheduler(Scheduler):
 
     def add(self, **kwargs):
         e = self.Entry(app=current_app, **kwargs)
-        self.rdb.zadd(self.key, self._when(e, e.is_due()[1]) or 0, pickle.dumps(e))
+        self.rdb.zadd(self.key, {jsonpickle.encode(e): self._when(e, e.is_due()[1]) or 0})
         return True
 
     def remove(self, task_key):
-        self.rdb.zrem(self.key, task_key)
+        tasks = self.rdb.zrange(self.key, 0, -1) or []
+        for idx, task in enumerate(tasks):
+            entry = jsonpickle.decode(task)
+            if entry.name == task_key:
+                self.rdb.zremrangebyrank(self.key, idx, idx)
+                return True
+        else:
+            return False
 
     def tick(self):
         if not self.rdb.exists(self.key):
             logger.warn("key: {} not in rdb".format(self.key))
             for e in values(self.schedule):
-                self.rdb.zadd(self.key, self._when(e, e.is_due()[1]) or 0, pickle.dumps(e))
+                self.rdb.zadd(self.key, {jsonpickle.encode(e): self._when(e, e.is_due()[1]) or 0})
 
         tasks = self.rdb.zrangebyscore(
             self.key, 0,
@@ -116,7 +125,7 @@ class RedisScheduler(Scheduler):
         next_times = [self.max_interval, ]
 
         for task, score in tasks:
-            entry = pickle.loads(task)
+            entry = jsonpickle.decode(task)
             is_due, next_time_to_run = self.is_due(entry)
 
             next_times.append(next_time_to_run)
@@ -131,13 +140,13 @@ class RedisScheduler(Scheduler):
                 else:
                     debug('%s sent. id->%s', entry.task, result.id)
                 self.rdb.zrem(self.key, task)
-                self.rdb.zadd(self.key, self._when(next_entry, next_time_to_run) or 0, pickle.dumps(next_entry))
+                self.rdb.zadd(self.key, {jsonpickle.encode(next_entry): self._when(next_entry, next_time_to_run) or 0})
 
         next_task = self.rdb.zrangebyscore(self.key, 0, MAXINT, withscores=True, num=1, start=0)
         if not next_task:
             linfo("no next task found")
             return min(next_times)
-        entry = pickle.loads(next_task[0][0])
+        entry = jsonpickle.decode(next_task[0][0])
         next_times.append(self.is_due(entry)[1])
 
         return min(next_times)
