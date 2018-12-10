@@ -1,1 +1,0 @@
-/Users/luke/.virtualenvs/pypress/lib/python2.7/site-packages/redisbeat-0.1.0-py2.7.egg

@@ -31,25 +31,31 @@ After you have installed `redisbeat`, you can easily start with following steps:
 
 This is a demo for exmaple, you can check the code in `example` directory
 
-1. start celery worker
+1. install dependence(**IMPORTANT**)
+
+    ```
+    $ pip install -r requirements.txt
+    ```
+    
+2. start celery worker
 
     ```
     $ celery worker -A tasks -l info
     ```
 
-2. start the celery beat with `RedisScheduler` as scheduler:
+3. start the celery beat with `RedisScheduler` as scheduler:
 
     ```
     $ celery beat -A tasks -S redisbeat.RedisScheduler
     ```
 
-3. dynamic add the task `sub`
+4. dynamic add the task `sub`
 
     ```
     $ python add_task.py
     ```
 
-4. dynamic remove the task `sub`
+5. dynamic remove the task `sub`
 
     ```
     $ python rem_task.py
@@ -162,3 +168,5 @@ CELERY_REDIS_SCHEDULER_LOCK_TTL = 30
 ```
 
 This is an experimental feature, to use `redisbeat` in production env, set `CELERY_REDIS_MULTI_NODE_MODE = False`, `redisbeat` will not use this feature.
+
+
