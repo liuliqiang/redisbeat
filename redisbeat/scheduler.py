@@ -10,7 +10,6 @@ from time import mktime
 from functools import partial
 
 import jsonpickle
-from celery.five import values
 from celery.beat import Scheduler
 from redis import StrictRedis
 from celery import current_app
@@ -112,11 +111,6 @@ class RedisScheduler(Scheduler):
             return False
 
     def tick(self):
-        if not self.rdb.exists(self.key):
-            logger.warn("key: {} not in rdb".format(self.key))
-            for e in values(self.schedule):
-                self.rdb.zadd(self.key, {jsonpickle.encode(e): self._when(e, e.is_due()[1]) or 0})
-
         tasks = self.rdb.zrangebyscore(
             self.key, 0,
             self.adjust(mktime(self.app.now().timetuple()), drift=0.010),
