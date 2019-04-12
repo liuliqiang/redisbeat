@@ -8,16 +8,14 @@ script: python setup.py test
 deploy:
   - provider: pypi
     user: yylucifer
-    password:
-      secure: "U+BWmyl1bawuoo2ckaO90KhE/P9l5z1bN76eeH6jsW9vL1O/uXaTdUch8WvKfucolU2RxaTJ6axKCQ7NAm6LtzQC2TqEIkKAsH8vI1BMPQdn98NsqctQOgkb+BzbfM9M0JIXqXRK4ZoX5rqeEGP0Z2qB/o/r6M0nPUdUwHdh3xlVU3PhV+0LefTKpf1qxlogGgNAsfayQusbz/MtlUbYRa+XZKCZswcICV7a7MP5zvRmlkEjOlIWRA8OV6mOTMTyXLe6bOcA8mfCZaAbTD66HcVPuTqSkTl3/QgzAA00Gr/R++TlYkcK9S1a9WuhqAekYjh1pIB+PRJigtzQkl24WdRsJ27hRchbXvGZl75yxy2xPxZ2uedXcp+mT2zgnJIl9pcUyny35sifiban6GY/MNOMBKY6zG+O8V5GrPZHHbRmRzUfFBLOXaqHLwGT/aXqWToqmu7aFSce05ZBCVySAdJb3hJ+OA8FQIy916s26vK8Yy/l6Y3aXDh7Unu4V0Q6Cwjf/XqKZFVm3o8AqWWTJ7a6zqFG+g+zSAygTz2hH1qWn5tFZlSULQy1PI5pI0h5v+YL8TGjB2b3mtU3llG7XMH0OWC2jegrkig9cY9oxbTLX3T4ZOeNPZJCVGn14Wdbn2HopCwB0DGxw/kKihUUoItlhZRIAT1cjYFcurZ2i6I="
+    password: ${PYPI_PASSWORD}
     on:
       python: 2.7
       tags: true
       branch: master
   - provider: pypi
     user: yylucifer
-    password:
-      secure: "U+BWmyl1bawuoo2ckaO90KhE/P9l5z1bN76eeH6jsW9vL1O/uXaTdUch8WvKfucolU2RxaTJ6axKCQ7NAm6LtzQC2TqEIkKAsH8vI1BMPQdn98NsqctQOgkb+BzbfM9M0JIXqXRK4ZoX5rqeEGP0Z2qB/o/r6M0nPUdUwHdh3xlVU3PhV+0LefTKpf1qxlogGgNAsfayQusbz/MtlUbYRa+XZKCZswcICV7a7MP5zvRmlkEjOlIWRA8OV6mOTMTyXLe6bOcA8mfCZaAbTD66HcVPuTqSkTl3/QgzAA00Gr/R++TlYkcK9S1a9WuhqAekYjh1pIB+PRJigtzQkl24WdRsJ27hRchbXvGZl75yxy2xPxZ2uedXcp+mT2zgnJIl9pcUyny35sifiban6GY/MNOMBKY6zG+O8V5GrPZHHbRmRzUfFBLOXaqHLwGT/aXqWToqmu7aFSce05ZBCVySAdJb3hJ+OA8FQIy916s26vK8Yy/l6Y3aXDh7Unu4V0Q6Cwjf/XqKZFVm3o8AqWWTJ7a6zqFG+g+zSAygTz2hH1qWn5tFZlSULQy1PI5pI0h5v+YL8TGjB2b3mtU3llG7XMH0OWC2jegrkig9cY9oxbTLX3T4ZOeNPZJCVGn14Wdbn2HopCwB0DGxw/kKihUUoItlhZRIAT1cjYFcurZ2i6I="
+    password: ${PYPI_PASSWORD}
     on:
       python: 3.6
       tags: true
