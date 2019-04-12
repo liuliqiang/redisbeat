@@ -7,7 +7,8 @@ except ImportError:
 
 # Get the long description from the README file
 long_desc = """
-to be done!
+Redis Scheduler For Celery, Support Add Task Dynamic
+See more @ https//liqiang.io/opensources/redisbeat
 """
 
 setup(
@@ -22,12 +23,12 @@ setup(
     long_description="",
 
     # The project's main homepage.
-    url="https://liqiang.io/opensource/redisbeat",
+    url="https://liqiang.io/opensources/redisbeat",
 
     # Author details
     author="Liqiang Liu",
     author_email="liqianglau@outlook.com",
-    home_page='https://liqiang.io/opensource/redisbeat',
+    home_page='https://liqiang.io/opensources/redisbeat',
 
     # Choose your license
     license='MIT',
