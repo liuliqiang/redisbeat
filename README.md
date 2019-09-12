@@ -61,6 +61,39 @@ This is a demo for exmaple, you can check the code in `example` directory
     $ python rem_task.py
     ```
 
+# Docker-compose demo
+
+Docker demo can be used from example-docker folder:
+
+	# cd celerybeatredis/example-docker
+	# docker-compose up -d
+
+After you have compose running, you can easily see it working with following commands:
+
+1. Celery worker logs
+
+    ```
+    $ docker-compose logs worker
+    ```
+
+1. Celery beat logs
+
+    ```
+    $ docker-compose logs beat
+    ```
+
+4. dynamic add the task `sub`
+
+    ```
+    $ docker exec -it beat python add_task.py
+    ```
+
+5. dynamic remove the task `sub`
+
+    ```
+    $ docker exec -it beat python rem_task.py
+    ```
+
 # Configuration
 
 Configuration for `redisbeat` is similar to the original celery configuration for beat.
