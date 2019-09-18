@@ -1,0 +1,35 @@
+version: '2'
+
+services:
+
+  worker:
+    container_name: worker
+    hostname: worker
+    restart: unless-stopped
+    build:
+      context: .
+    command: ["celery", "worker", "-A", "tasks", "-l", "INFO"]
+    depends_on:
+      - redis    
+    stdin_open: true
+    tty: true
+
+  beat:
+    container_name: beat
+    hostname: beat
+    restart: unless-stopped
+    build:
+      context: .
+    command: ["celery", "beat", "-A", "tasks",
+              "-S", "redisbeat.RedisScheduler", "-l", "INFO"]
+    depends_on:
+      - worker
+      - redis
+    stdin_open: true
+    tty: true
+
+  redis:
+    container_name: redis
+    hostname: redis
+    restart: unless-stopped
+    image: redis

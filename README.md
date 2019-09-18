@@ -25,43 +25,63 @@ or you can install from source by cloning this repository:
 	# cd celerybeatredis
 	# python setup.py install
 
-# Usage
+# Docker-compose demo
 
-After you have installed `redisbeat`, you can easily start with following steps:
+`redisbeat` provides a Docker demo in example folder that you can use:
 
-This is a demo for exmaple, you can check the code in `example` directory
+```
+# cd celerybeatredis/example-docker
+# docker-compose up -d
+```
 
-1. install dependence(**IMPORTANT**)
+After you have compose running, you can easily see it working with following commands:
 
-    ```
-    $ pip install -r requirements.txt
-    ```
-    
-2. start celery worker
-
-    ```
-    $ celery worker -A tasks -l info
-    ```
-
-3. start the celery beat with `RedisScheduler` as scheduler:
+1. Celery worker logs
 
     ```
-    $ celery beat -A tasks -S redisbeat.RedisScheduler
+    # docker-compose logs worker
+    ```
+
+1. Celery beat logs
+
+    ```
+    # docker-compose logs beat
     ```
 
 4. dynamic add the task `sub`
 
     ```
-    $ python add_task.py
+    # docker exec -it beat python add_task.py
     ```
 
 5. dynamic remove the task `sub`
 
     ```
-    $ python rem_task.py
+    # docker exec -it beat python rem_task.py
     ```
 
-# Configuration
+# Running demo locally without Docker
+
+If you want to try locally you can install the requirements from pip, and run it as a python project changing the url of redis from 'redis' to 'localhost' in tasks.py Celery instance and config:
+
+```python
+#(...)
+app = Celery('tasks', backend='redis://redis:6379',
+                broker='redis://redis:6379')
+
+app.conf.update(
+    CELERY_REDIS_SCHEDULER_URL = 'redis://redis:6379',
+#(...)
+```
+
+Commands to start worker and beat:
+
+```
+# celery worker -A tasks -l INFO
+# celery beat -A tasks -S redisbeat.RedisScheduler -l INFO
+```
+
+# Configuration and Usage
 
 Configuration for `redisbeat` is similar to the original celery configuration for beat.
 You can configure `redisbeat` as:
