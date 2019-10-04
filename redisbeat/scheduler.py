@@ -16,7 +16,11 @@ from redis.sentinel import Sentinel
 from celery import current_app
 from celery.utils.log import get_logger
 from redis.exceptions import LockError
-import urlparse
+try:
+    import urllib.parse as urlparse
+except ImportError:
+    import urlparse
+
 logger = get_logger(__name__)
 debug, linfo, error, warning = (logger.debug, logger.info, logger.error,
                                 logger.warning)
