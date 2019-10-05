@@ -12,9 +12,14 @@ from functools import partial
 import jsonpickle
 from celery.beat import Scheduler
 from redis import StrictRedis
+from redis.sentinel import Sentinel
 from celery import current_app
 from celery.utils.log import get_logger
 from redis.exceptions import LockError
+try:
+    import urllib.parse as urlparse
+except ImportError:
+    import urlparse
 
 logger = get_logger(__name__)
 debug, linfo, error, warning = (logger.debug, logger.info, logger.error,
@@ -33,7 +38,13 @@ class RedisScheduler(Scheduler):
                                 "celery:beat:order_tasks")
         self.schedule_url = app.conf.get("CELERY_REDIS_SCHEDULER_URL",
                                          "redis://localhost:6379")
-        self.rdb = StrictRedis.from_url(self.schedule_url)
+        # using sentinels
+        # supports 'sentinel://:pass@host:port/db
+        if self.schedule_url.startswith('sentinel://'):
+            self.broker_transport_options = app.conf.get("CELERY_BROKER_TRANSPORT_OPTIONS", {"master_name": "mymaster"})
+            self.rdb = self.sentinel_connect(self.broker_transport_options['master_name'])
+        else:
+            self.rdb = StrictRedis.from_url(self.schedule_url)
         Scheduler.__init__(self, *args, **kwargs)
         app.add_task = partial(self.add, self)
 
@@ -154,6 +165,37 @@ class RedisScheduler(Scheduler):
             except LockError:
                 pass
         self.sync()
+
+    def sentinel_connect(self, master_name):
+        url = urlparse.urlparse(self.schedule_url)
+
+        def parse_host(s):
+            if ':' in s:
+                host, port = s.split(':', 1)
+                port = int(port)
+            else:
+                host = s
+                port = 26379
+
+            return host, port
+
+        if '@' in url.netloc:
+            auth, hostspec = url.netloc.split('@', 1)
+        else:
+            auth = None
+            hostspec = url.netloc
+
+        if auth and ':' in auth:
+            _, password = auth.split(':', 1)
+        else:
+            password = None
+        path = url.path
+        if path.startswith('/'):
+            path = path[1:]
+        hosts = [parse_host(s) for s in hostspec.split(',')]
+        sentinel = Sentinel(hosts, password=password, db=path)
+        master = sentinel.master_for(master_name)
+        return master
 
     @property
     def info(self):
