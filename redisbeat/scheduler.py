@@ -122,6 +122,18 @@ class RedisScheduler(Scheduler):
         else:
             return False
 
+    def list(self):
+        return [jsonpickle.decode(entry) for entry in self.rdb.zrange(self.key, 0, -1)]
+    
+    def get(self, task_key):
+        tasks = self.rdb.zrange(self.key, 0, -1) or []
+        for idx, task in enumerate(tasks):
+            entry = jsonpickle.decode(task)
+            if entry.name == task_key:
+                return entry
+        else:
+            return None
+        
     def tick(self):
         tasks = self.rdb.zrangebyscore(
             self.key, 0,
