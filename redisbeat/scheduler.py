@@ -68,7 +68,7 @@ class RedisScheduler(Scheduler):
         self.merge_inplace(self.app.conf.CELERYBEAT_SCHEDULE)
         tasks = [jsonpickle.decode(entry) for entry in self.rdb.zrange(self.key, 0, -1)]
         linfo('Current schedule:\n' + '\n'.join(
-              str('task: ' + entry.task + '; each: ' + entry.schedule.human_seconds)
+              str('task: ' + entry.task + '; each: ' + repr(entry.schedule))
               for entry in tasks))
 
     def merge_inplace(self, tasks):
