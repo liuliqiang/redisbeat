@@ -1,16 +1,21 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# Copyright 2014 Kong Luoxing
+# Copyright 2017-2020 Liqiang Lau
+"""
+ @desc:
+ @author: liqiang lau
+ @contact: liqianglau@outlook.com
+ @site: https://liqiang.io
+ @created at: 2020/3/7
+"""
 
-# Licensed under the Apache License, Version 2.0 (the 'License'); you may not
-# use this file except in compliance with the License. You may obtain a copy
-# of the License at http://www.apache.org/licenses/LICENSE-2.0
 import sys
 import traceback
 from time import mktime
 from functools import partial
 
 import jsonpickle
-from celery.beat import Scheduler
+from celery.beat import Scheduler, ScheduleEntry
 from redis import StrictRedis
 from redis.sentinel import Sentinel
 from celery import current_app
@@ -21,14 +26,17 @@ try:
 except ImportError:
     import urlparse
 
+from redisbeat.constants import (
+    INIT_POLICIES,
+    INIT_POLICY_DEFAULT,
+    INIT_POLICY_IMMEDIATELY,
+    INIT_POLICY_RESET,
+)
+
+
 logger = get_logger(__name__)
 debug, linfo, error, warning = (logger.debug, logger.info, logger.error,
                                 logger.warning)
-try:
-    MAXINT = sys.maxint
-except AttributeError:
-    # python3
-    MAXINT = sys.maxsize
 
 
 class RedisScheduler(Scheduler):
@@ -36,6 +44,10 @@ class RedisScheduler(Scheduler):
         app = kwargs['app']
         self.key = app.conf.get("CELERY_REDIS_SCHEDULER_KEY",
                                 "celery:beat:order_tasks")
+        self.schedule_init_policy = app.conf.get("CELERY_REDIS_SCHEDULER_INIT_POLICY",
+                                                 INIT_POLICY_DEFAULT)
+        if self.schedule_init_policy not in INIT_POLICIES:
+            raise "unexpected init policy " + self.schedule_init_policy
         self.schedule_url = app.conf.get("CELERY_REDIS_SCHEDULER_URL",
                                          "redis://localhost:6379")
         # using sentinels
@@ -66,13 +78,38 @@ class RedisScheduler(Scheduler):
     def setup_schedule(self):
         # init entries
         self.merge_inplace(self.app.conf.CELERYBEAT_SCHEDULE)
-        tasks = [jsonpickle.decode(entry) for entry in self.rdb.zrange(self.key, 0, -1)]
+        entries = [jsonpickle.decode(task) for task in self.rdb.zrange(self.key, 0, -1)]
         linfo('Current schedule:\n' + '\n'.join(
-              str('task: ' + entry.task + '; each: ' + repr(entry.schedule))
-              for entry in tasks))
+            str('task: ' + entry.task + '; each: ' + repr(entry.schedule))
+            for entry in entries))
+        if self.schedule_init_policy != INIT_POLICY_DEFAULT:
+            for entry in entries:
+                next_run_time = self._calculate_next_run_time_with_init_policy(entry)
+                self.rdb.zrem(self.key, entry)
+                self.rdb.zadd(self.key, {jsonpickle.encode(entry): next_run_time})
+
+    def _calculate_next_run_time_with_init_policy(self, entry):
+        if self.schedule_init_policy == INIT_POLICY_RESET:
+            entry.last_run_at = entry.default_now()
+            _, next_time_to_run = entry.is_due()
+            return next_time_to_run, entry
+        elif self.schedule_init_policy == INIT_POLICY_IMMEDIATELY:
+            return 0, entry
+        else:
+            # INIT_POLICY_FAST_FORWARD
+            last_run_at = entry.last_run_at
+            is_due, next_time_to_run = entry.is_due()
+            if is_due:
+                while is_due:
+                    entry.last_run_at = last_run_at + next_time_to_run
+                    is_due, next_time_to_run = entry.is_due()
+                entry.last_run_at -= next_time_to_run
+                return 0, entry
+            else:
+                return next_time_to_run, entry
 
     def merge_inplace(self, tasks):
-        old_entries = self.rdb.zrangebyscore(self.key, 0, MAXINT, withscores=True)
+        old_entries = self.rdb.zrangebyscore(self.key, 0, -1, withscores=True)
         old_entries_dict = dict({})
         for task, score in old_entries:
             if not task:
@@ -160,7 +197,7 @@ class RedisScheduler(Scheduler):
                 self.rdb.zrem(self.key, task)
                 self.rdb.zadd(self.key, {jsonpickle.encode(next_entry): self._when(next_entry, next_time_to_run) or 0})
 
-        next_task = self.rdb.zrangebyscore(self.key, 0, MAXINT, withscores=True, num=1, start=0)
+        next_task = self.rdb.zrangebyscore(self.key, 0, -1, withscores=True, num=1, start=0)
         if not next_task:
             linfo("no next task found")
             return min(next_times)

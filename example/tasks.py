@@ -9,8 +9,10 @@ app = Celery('tasks', backend='redis://redis:6379',
 
 app.conf.update(
     CELERY_REDIS_SCHEDULER_URL = 'redis://redis:6379',
+    BROKER_URL = "redis://localhost:6379/0",
+    CELERY_REDIS_SCHEDULER_KEY_PREFIX = 'tasks:meta:',
     CELERYBEAT_SCHEDULE={
-        'perminute': {
+        'add-every-3-seconds': {
             'task': 'tasks.add',
             'schedule': timedelta(seconds=3),
             'args': (1, 1)

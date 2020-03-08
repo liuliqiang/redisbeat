@@ -1,5 +1,8 @@
 #!/usr/bin/env python
+import sys
 try:
+    import setuptools
+    import setuptools.command.test
     from setuptools import find_packages, setup
 except ImportError:
     from distutils.core import setup, find_packages
@@ -10,6 +13,21 @@ long_desc = """
 Redis Scheduler For Celery, Support Add Task Dynamic
 See more @ https//liqiang.io/opensources/redisbeat
 """
+
+
+class pytest(setuptools.command.test.test):
+    user_options = [('pytest-args=', 'a', 'Arguments to pass to py.test')]
+
+    def initialize_options(self):
+        setuptools.command.test.test.initialize_options(self)
+        self.pytest_args = []
+
+    def run_tests(self):
+        import pytest as _pytest
+        sys.exit(_pytest.main(self.pytest_args))
+
+
+
 
 setup(
     name="redisbeat",
@@ -22,16 +40,16 @@ setup(
     description="Redis Scheduler For Celery, Support Add Task Dynamic",
     long_description="",
 
-    # The project's main homepage.
-    url="https://liqiang.io/opensources/redisbeat",
-
     # Author details
     author="Liqiang Liu",
     author_email="liqianglau@outlook.com",
-    home_page='https://liqiang.io/opensources/redisbeat',
+    # The project's main homepage.
+    url="https://liqiang.io/opensources/redisbeat",
 
     # Choose your license
     license='MIT',
+
+    cmdclass={'test': pytest},
 
     # See https://pypi.python.org/pypi?%3Aaction=list_classifiers
     classifiers=[
