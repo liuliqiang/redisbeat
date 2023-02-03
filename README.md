@@ -70,7 +70,7 @@ app = Celery('tasks', backend='redis://redis:6379',
                 broker='redis://redis:6379')
 
 app.conf.update(
-    CELERY_REDIS_SCHEDULER_URL = 'redis://redis:6379',
+    redis_scheduler_url = 'redis://redis:6379',
 #(...)
 ```
 
@@ -98,7 +98,7 @@ app = Celery('tasks', backend='redis://localhost:6379',
              broker='redis://localhost:6379')
 
 app.conf.update(
-    CELERYBEAT_SCHEDULE={
+    beat_schedule={
         'perminute': {
             'task': 'tasks.add',
             'schedule': timedelta(seconds=3),
@@ -130,7 +130,7 @@ app = Celery('tasks', backend='redis://localhost:6379',
              broker='redis://localhost:6379')
 
 app.conf.update(
-    CELERYBEAT_SCHEDULE={
+    beat_schedule={
         'perminute': {
             'task': 'tasks.add',
             'schedule': timedelta(seconds=3),
@@ -166,10 +166,10 @@ It can be easily to add task for two step:
 Or you can define settings in your celery configuration file similar to other configurations.
 
 ```python
-CELERY_BEAT_SCHEDULER = 'redisbeat.RedisScheduler'
-CELERY_REDIS_SCHEDULER_URL = 'redis://localhost:6379/1'
-CELERY_REDIS_SCHEDULER_KEY = 'celery:beat:order_tasks'
-CELERYBEAT_SCHEDULE = {
+beat_scheduler = 'redisbeat.RedisScheduler'
+redis_scheduler_url = 'redis://localhost:6379/1'
+redis_scheduler_key = 'celery:beat:order_tasks'
+beat_schedule = {
     'perminute': {
         'task': 'tasks.add',
         'schedule': timedelta(seconds=3),
@@ -183,10 +183,10 @@ CELERYBEAT_SCHEDULE = {
 For running `redisbeat` in multi node deployment, it uses redis lock to prevent same task to be executed mutiple times.
 
 ```python
-CELERY_REDIS_MULTI_NODE_MODE = True
-CELERY_REDIS_SCHEDULER_LOCK_TTL = 30
+redis_multi_node_mode = True
+redis_scheduler_lock_ttl = 30
 ```
 
-This is an experimental feature, to use `redisbeat` in production env, set `CELERY_REDIS_MULTI_NODE_MODE = False`, `redisbeat` will not use this feature.
+This is an experimental feature, to use `redisbeat` in production env, set `redis_multi_node_mode = False`, `redisbeat` will not use this feature.
 
 
