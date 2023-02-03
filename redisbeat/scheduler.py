@@ -34,24 +34,25 @@ except AttributeError:
 class RedisScheduler(Scheduler):
     def __init__(self, *args, **kwargs):
         app = kwargs['app']
-        self.key = app.conf.get("CELERY_REDIS_SCHEDULER_KEY",
+
+        self.key = app.conf.get("redis_scheduler_url",
                                 "celery:beat:order_tasks")
-        self.schedule_url = app.conf.get("CELERY_REDIS_SCHEDULER_URL",
+        self.schedule_url = app.conf.get("redis_scheduler_url",
                                          "redis://localhost:6379")
         # using sentinels
         # supports 'sentinel://:pass@host:port/db
         if self.schedule_url.startswith('sentinel://'):
-            self.broker_transport_options = app.conf.get("CELERY_BROKER_TRANSPORT_OPTIONS", {"master_name": "mymaster"})
-            self.rdb = self.sentinel_connect(self.broker_transport_options['master_name'])
+            self.broker_transport_options = app.conf.broker_transport_options
+            self.rdb = self.sentinel_connect(broker_transport_options.get("master_name", "mymaster"))
         else:
             self.rdb = StrictRedis.from_url(self.schedule_url)
         Scheduler.__init__(self, *args, **kwargs)
         app.add_task = partial(self.add, self)
 
-        self.multi_node = app.conf.get("CELERY_REDIS_MULTI_NODE_MODE", False)
+        self.multi_node = app.conf.get("redis_multi_node_mode", False)
         # how long we should hold on to the redis lock in seconds
         if self.multi_node:
-            self.lock_ttl = current_app.conf.get("CELERY_REDIS_SCHEDULER_LOCK_TTL", 30)
+            self.lock_ttl = current_app.conf.get("redis_scheduler_lock_ttl", 30)
             self._lock_acquired = False
             self._lock = self.rdb.lock('celery:beat:task_lock', timeout=self.lock_ttl)
             self._lock_acquired = self._lock.acquire(blocking=False)
@@ -65,7 +66,7 @@ class RedisScheduler(Scheduler):
 
     def setup_schedule(self):
         # init entries
-        self.merge_inplace(self.app.conf.CELERYBEAT_SCHEDULE)
+        self.merge_inplace(self.app.conf.beat_schedule)
         tasks = [jsonpickle.decode(entry) for entry in self.rdb.zrange(self.key, 0, -1)]
         linfo('Current schedule:\n' + '\n'.join(
               str('task: ' + entry.task + '; each: ' + repr(entry.schedule))

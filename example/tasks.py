@@ -8,8 +8,8 @@ app = Celery('tasks', backend='redis://redis:6379',
              broker='redis://redis:6379')
 
 app.conf.update(
-    CELERY_REDIS_SCHEDULER_URL = 'redis://redis:6379',
-    CELERYBEAT_SCHEDULE={
+    redis_scheduler_url = 'redis://redis:6379',
+    beat_schedule = {
         'perminute': {
             'task': 'tasks.add',
             'schedule': timedelta(seconds=3),

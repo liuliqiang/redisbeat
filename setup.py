@@ -73,5 +73,6 @@ setup(
     # https://packaging.python.org/en/latest/requirements.html
     install_requires=[
         'jsonpickle==1.2',
+        'celery>=5'
     ]
 )
