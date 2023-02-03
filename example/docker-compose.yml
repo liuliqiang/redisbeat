@@ -8,9 +8,9 @@ services:
     restart: unless-stopped
     build:
       context: .
-    command: ["celery", "worker", "-A", "tasks", "-l", "INFO"]
+    command: ["celery", "-A", "tasks", "worker", "-l", "INFO"]
     depends_on:
-      - redis    
+      - redis
     stdin_open: true
     tty: true
 
@@ -20,7 +20,7 @@ services:
     restart: unless-stopped
     build:
       context: .
-    command: ["celery", "beat", "-A", "tasks",
+    command: ["celery", "-A", "tasks", "beat",
               "-S", "redisbeat.RedisScheduler", "-l", "INFO"]
     depends_on:
       - worker

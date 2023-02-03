@@ -1,6 +1,5 @@
 amqp==2.5.1
 billiard==3.6.1.0
-celery==4.3.0
 kombu==4.6.3
 pytz==2019.2
 redis==3.3.8
