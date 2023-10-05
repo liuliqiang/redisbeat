@@ -68,7 +68,7 @@ class RedisScheduler(Scheduler):
         self.merge_inplace(self.app.conf.CELERYBEAT_SCHEDULE)
         tasks = [jsonpickle.decode(entry) for entry in self.rdb.zrange(self.key, 0, -1)]
         linfo('Current schedule:\n' + '\n'.join(
-              str('task: ' + entry.task + '; each: ' + entry.schedule.human_seconds)
+              str('task: ' + entry.task + '; each: ' + repr(entry.schedule))
               for entry in tasks))
 
     def merge_inplace(self, tasks):
@@ -77,10 +77,10 @@ class RedisScheduler(Scheduler):
         for task, score in old_entries:
             if not task:
                 break
-            debug("ready to loads old entry: ", str(task))
+            debug("ready to load old_entries: %s", str(task))
             entry = jsonpickle.decode(task)
             old_entries_dict[entry.name] = (entry, score)
-        debug("old_entries: {}".format(old_entries_dict))
+        debug("old_entries: %s", old_entries_dict)
 
         self.rdb.delete(self.key)
 
@@ -92,11 +92,11 @@ class RedisScheduler(Scheduler):
                 last_run_at = old_entries_dict[key][1]
                 del old_entries_dict[key]
             self.rdb.zadd(self.key, {jsonpickle.encode(e): min(last_run_at, self._when(e, e.is_due()[1]) or 0)})
-        debug("old_entries: {}".format(old_entries_dict))
+        debug("old_entries: %s",old_entries_dict))
         for key, tasks in old_entries_dict.items():
-            debug("key: {}".format(key))
-            debug("tasks: {}".format(tasks))
-            debug("zadd: {}".format(self.rdb.zadd(self.key, {jsonpickle.encode(tasks[0]): tasks[1]})))
+            debug("key: %s", key)
+            debug("tasks: %s", tasks)
+            debug("zadd: %s", self.rdb.zadd(self.key, {jsonpickle.encode(tasks[0]): tasks[1]}))
         debug(self.rdb.zrange(self.key, 0, -1))
 
     def is_due(self, entry):
@@ -122,6 +122,18 @@ class RedisScheduler(Scheduler):
         else:
             return False
 
+    def list(self):
+        return [jsonpickle.decode(entry) for entry in self.rdb.zrange(self.key, 0, -1)]
+    
+    def get(self, task_key):
+        tasks = self.rdb.zrange(self.key, 0, -1) or []
+        for idx, task in enumerate(tasks):
+            entry = jsonpickle.decode(task)
+            if entry.name == task_key:
+                return entry
+        else:
+            return None
+        
     def tick(self):
         tasks = self.rdb.zrangebyscore(
             self.key, 0,
@@ -138,7 +150,7 @@ class RedisScheduler(Scheduler):
             if is_due:
                 next_entry = self.reserve(entry)
                 try:
-                    linfo("add task entry: {} to publisher".format(entry.name))
+                    linfo("add task entry: %s to publisher", entry.name)
                     result = self.apply_async(entry)
                 except Exception as exc:
                     error('Message Error: %s\n%s',
