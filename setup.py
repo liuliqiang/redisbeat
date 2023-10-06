@@ -72,6 +72,6 @@ setup(
     # requirements files see:
     # https://packaging.python.org/en/latest/requirements.html
     install_requires=[
-        'jsonpickle==1.2',
+        'jsonpickle==1.4.2',
     ]
 )
