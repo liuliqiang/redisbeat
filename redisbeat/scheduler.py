@@ -92,7 +92,7 @@ class RedisScheduler(Scheduler):
                 last_run_at = old_entries_dict[key][1]
                 del old_entries_dict[key]
             self.rdb.zadd(self.key, {jsonpickle.encode(e): min(last_run_at, self._when(e, e.is_due()[1]) or 0)})
-        debug("old_entries: %s",old_entries_dict))
+        debug("old_entries: %s",old_entries_dict)
         for key, tasks in old_entries_dict.items():
             debug("key: %s", key)
             debug("tasks: %s", tasks)
