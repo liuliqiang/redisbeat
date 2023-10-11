@@ -4,17 +4,17 @@
 # Licensed under the Apache License, Version 2.0 (the 'License'); you may not
 # use this file except in compliance with the License. You may obtain a copy
 # of the License at http://www.apache.org/licenses/LICENSE-2.0
-import sys
-import traceback
-from time import mktime
 from functools import partial
-
 import jsonpickle
+import sys
+from time import mktime
+import traceback
+
 from celery.beat import Scheduler
-from redis import StrictRedis
-from redis.sentinel import Sentinel
 from celery import current_app
 from celery.utils.log import get_logger
+from redis import StrictRedis
+from redis.sentinel import Sentinel
 from redis.exceptions import LockError
 try:
     import urllib.parse as urlparse
@@ -36,13 +36,16 @@ class RedisScheduler(Scheduler):
         app = kwargs['app']
         self.key = app.conf.get("CELERY_REDIS_SCHEDULER_KEY",
                                 "celery:beat:order_tasks")
+        self.max_interval = 2  # default max interval is 2 seconds
         self.schedule_url = app.conf.get("CELERY_REDIS_SCHEDULER_URL",
                                          "redis://localhost:6379")
         # using sentinels
         # supports 'sentinel://:pass@host:port/db
         if self.schedule_url.startswith('sentinel://'):
-            self.broker_transport_options = app.conf.get("CELERY_BROKER_TRANSPORT_OPTIONS", {"master_name": "mymaster"})
-            self.rdb = self.sentinel_connect(self.broker_transport_options['master_name'])
+            self.broker_transport_options = app.conf.get(
+                "CELERY_BROKER_TRANSPORT_OPTIONS", {"master_name": "mymaster"})
+            self.rdb = self.sentinel_connect(
+                self.broker_transport_options['master_name'])
         else:
             self.rdb = StrictRedis.from_url(self.schedule_url)
         Scheduler.__init__(self, *args, **kwargs)
@@ -51,9 +54,11 @@ class RedisScheduler(Scheduler):
         self.multi_node = app.conf.get("CELERY_REDIS_MULTI_NODE_MODE", False)
         # how long we should hold on to the redis lock in seconds
         if self.multi_node:
-            self.lock_ttl = current_app.conf.get("CELERY_REDIS_SCHEDULER_LOCK_TTL", 30)
+            self.lock_ttl = current_app.conf.get(
+                "CELERY_REDIS_SCHEDULER_LOCK_TTL", 30)
             self._lock_acquired = False
-            self._lock = self.rdb.lock('celery:beat:task_lock', timeout=self.lock_ttl)
+            self._lock = self.rdb.lock(
+                'celery:beat:task_lock', timeout=self.lock_ttl)
             self._lock_acquired = self._lock.acquire(blocking=False)
 
     def _remove_db(self):
@@ -66,13 +71,15 @@ class RedisScheduler(Scheduler):
     def setup_schedule(self):
         # init entries
         self.merge_inplace(self.app.conf.CELERYBEAT_SCHEDULE)
-        tasks = [jsonpickle.decode(entry) for entry in self.rdb.zrange(self.key, 0, -1)]
+        tasks = [jsonpickle.decode(entry)
+                 for entry in self.rdb.zrange(self.key, 0, -1)]
         linfo('Current schedule:\n' + '\n'.join(
               str('task: ' + entry.task + '; each: ' + repr(entry.schedule))
               for entry in tasks))
 
     def merge_inplace(self, tasks):
-        old_entries = self.rdb.zrangebyscore(self.key, 0, MAXINT, withscores=True)
+        old_entries = self.rdb.zrangebyscore(
+            self.key, 0, MAXINT, withscores=True)
         old_entries_dict = dict({})
         for task, score in old_entries:
             if not task:
@@ -91,12 +98,14 @@ class RedisScheduler(Scheduler):
                 # replace entry and remain old score
                 last_run_at = old_entries_dict[key][1]
                 del old_entries_dict[key]
-            self.rdb.zadd(self.key, {jsonpickle.encode(e): min(last_run_at, self._when(e, e.is_due()[1]) or 0)})
-        debug("old_entries: %s",old_entries_dict)
+            self.rdb.zadd(self.key, {jsonpickle.encode(e): min(
+                last_run_at, self._when(e, e.is_due()[1]) or 0)})
+        debug("old_entries: %s", old_entries_dict)
         for key, tasks in old_entries_dict.items():
             debug("key: %s", key)
             debug("tasks: %s", tasks)
-            debug("zadd: %s", self.rdb.zadd(self.key, {jsonpickle.encode(tasks[0]): tasks[1]}))
+            debug("zadd: %s", self.rdb.zadd(
+                self.key, {jsonpickle.encode(tasks[0]): tasks[1]}))
         debug(self.rdb.zrange(self.key, 0, -1))
 
     def is_due(self, entry):
@@ -109,7 +118,8 @@ class RedisScheduler(Scheduler):
 
     def add(self, **kwargs):
         e = self.Entry(app=current_app, **kwargs)
-        self.rdb.zadd(self.key, {jsonpickle.encode(e): self._when(e, e.is_due()[1]) or 0})
+        self.rdb.zadd(self.key, {jsonpickle.encode(
+            e): self._when(e, e.is_due()[1]) or 0})
         return True
 
     def remove(self, task_key):
@@ -124,7 +134,7 @@ class RedisScheduler(Scheduler):
 
     def list(self):
         return [jsonpickle.decode(entry) for entry in self.rdb.zrange(self.key, 0, -1)]
-    
+
     def get(self, task_key):
         tasks = self.rdb.zrange(self.key, 0, -1) or []
         for idx, task in enumerate(tasks):
@@ -133,7 +143,7 @@ class RedisScheduler(Scheduler):
                 return entry
         else:
             return None
-        
+
     def tick(self):
         tasks = self.rdb.zrangebyscore(
             self.key, 0,
@@ -158,9 +168,11 @@ class RedisScheduler(Scheduler):
                 else:
                     debug('%s sent. id->%s', entry.task, result.id)
                 self.rdb.zrem(self.key, task)
-                self.rdb.zadd(self.key, {jsonpickle.encode(next_entry): self._when(next_entry, next_time_to_run) or 0})
+                self.rdb.zadd(self.key, {jsonpickle.encode(
+                    next_entry): self._when(next_entry, next_time_to_run) or 0})
 
-        next_task = self.rdb.zrangebyscore(self.key, 0, MAXINT, withscores=True, num=1, start=0)
+        next_task = self.rdb.zrangebyscore(
+            self.key, 0, MAXINT, withscores=True, num=1, start=0)
         if not next_task:
             linfo("no next task found")
             return min(next_times)
