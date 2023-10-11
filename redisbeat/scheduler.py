@@ -34,6 +34,7 @@ except AttributeError:
 class RedisScheduler(Scheduler):
     def __init__(self, *args, **kwargs):
         app = kwargs['app']
+        self.skip_init = kwargs.get('skip_init', False)
         self.key = app.conf.get("CELERY_REDIS_SCHEDULER_KEY",
                                 "celery:beat:order_tasks")
         self.max_interval = 2  # default max interval is 2 seconds
@@ -69,6 +70,9 @@ class RedisScheduler(Scheduler):
         return mktime(entry.schedule.now().timetuple()) + (self.adjust(next_time_to_run) or 0)
 
     def setup_schedule(self):
+        debug("setup schedule, skip_init: %s", self.skip_init)
+        if self.skip_init:
+            return
         # init entries
         self.merge_inplace(self.app.conf.CELERYBEAT_SCHEDULE)
         tasks = [jsonpickle.decode(entry)
