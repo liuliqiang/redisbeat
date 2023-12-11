@@ -11,15 +11,14 @@ hostname = os.getenv("HOSTNAME")
 if hostname != "beat" and hostname != "worker":
     redis_url = 'redis://localhost:6379'
 
-
 app = Celery('tasks', backend=redis_url, broker=redis_url)
 
 app.conf.update(CELERY_REDIS_SCHEDULER_URL = redis_url)
 
-if hostname == "beat":
+if hostname == "devops":
     app.conf.update(
         CELERYBEAT_SCHEDULE={
-            'perminute': {
+            'every-3-seconds': {
                 'task': 'tasks.add',
                 'schedule': timedelta(seconds=3),
                 'args': (1, 1)
