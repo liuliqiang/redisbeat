@@ -35,7 +35,7 @@ setup(
     # Versions should comply with PEP440.  For a discussion on single-sourcing
     # the version across setup.py and the project code, see
     # https://packaging.python.org/en/latest/single_source_version.html
-    version="1.2.4",
+    version="1.2.7",
 
     description="Redis Scheduler For Celery, Support Add Task Dynamic",
     long_description="",
@@ -72,6 +72,8 @@ setup(
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.9',
     ],
 
     # What does your project relate to?
@@ -90,6 +92,6 @@ setup(
     # requirements files see:
     # https://packaging.python.org/en/latest/requirements.html
     install_requires=[
-        'jsonpickle==1.2',
+        'jsonpickle==1.4.2',
     ]
 )

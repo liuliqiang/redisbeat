@@ -3,8 +3,8 @@
 # Copyright 2017-2020 Liqiang Lau
 """
  @desc: `
- @author: liqiang lau
- @contact: liqianglau@outlook.com
+ @author: liqiang liu
+ @contact: liqiangliu443@gmail.com
  @site: https://liqiang.io
  @created at: 2020/3/7
 """

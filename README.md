@@ -21,8 +21,8 @@ And you can add scheduler task dynamically when you need to add scheduled task.
 
 or you can install from source by cloning this repository:
 
-	# git clone https://github.com/yetship/celerybeatredis.git
-	# cd celerybeatredis
+	# git clone https://github.com/liuliqiang/redisbeat.git
+	# cd redisbeat
 	# python setup.py install
 
 # Docker-compose demo
@@ -30,7 +30,7 @@ or you can install from source by cloning this repository:
 `redisbeat` provides a Docker demo in example folder that you can use:
 
 ```
-# cd celerybeatredis/example-docker
+# cd redisbeat/example
 # docker-compose up -d
 ```
 
