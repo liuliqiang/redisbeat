@@ -1,19 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# Copyright 2017-2020 Liqiang Lau
-"""
- @desc:
- @author: liqiang lau
- @contact: liqianglau@outlook.com
- @site: https://liqiang.io
- @created at: 2020/3/7
-"""
+# Copyright 2014 Kong Luoxing
 
 # Licensed under the Apache License, Version 2.0 (the 'License'); you may not
 # use this file except in compliance with the License. You may obtain a copy
 # of the License at http://www.apache.org/licenses/LICENSE-2.0
 ################################################################
 # Copyright 2015-2024 Liqiang Liu
+
 # Licensed under the Apache License, Version 2.0 (the 'License'); you may not
 # use this file except in compliance with the License. You may obtain a copy
 # of the License at http://www.apache.org/licenses/LICENSE-2.0
@@ -36,9 +30,15 @@ except ImportError:
 
 from redisbeat.constants import (
     INIT_POLICIES,
-    INIT_POLICY_DEFAULT,
+    DEFUALT_INIT_POLICY,
     INIT_POLICY_IMMEDIATELY,
     INIT_POLICY_RESET,
+    CONFIG_INIT_POLICY,
+    BROKER_URL,
+    BROKER_KEY,
+    BROKER_TRANSPORT_OPTIONS,
+    MULTI_NODE_MODE,
+    LOCK_TTL,
 )
 
 
@@ -46,37 +46,58 @@ logger = get_logger(__name__)
 debug, linfo, error, warning = (logger.debug, logger.info, logger.error,
                                 logger.warning)
 
+default_transport_options = {
+    "master_name": "mymaster",
+}
+default_broker_key = "celery:beat:order_tasks"
+
+
+class EncodeException(Exception):
+    pass
+
+class Codec(object):
+    """
+    Codec is used to encode and decode task entry
+    The default codec is jsonpickle
+    """
+    def encode(self, obj):
+        encode_obj = jsonpickle.encode(obj)
+        if encode_obj is None:
+            raise EncodeException("encode obj is None")
+        return encode_obj
+
+    def decode(self, obj):
+        return jsonpickle.decode(obj)
+
 
 class RedisScheduler(Scheduler):
     def __init__(self, *args, **kwargs):
         app = kwargs['app']
         self.skip_init = kwargs.get('skip_init', False)
-        self.key = app.conf.get("CELERY_REDIS_SCHEDULER_KEY",
-                                "celery:beat:order_tasks")
-        self.schedule_init_policy = app.conf.get("CELERY_REDIS_SCHEDULER_INIT_POLICY",
-                                                 INIT_POLICY_DEFAULT)
+
+        self.codec = Codec()
+
+        self.key = app.conf.get(BROKER_KEY, default_broker_key)
+        self.schedule_init_policy = app.conf.get(CONFIG_INIT_POLICY, DEFUALT_INIT_POLICY)
         if self.schedule_init_policy not in INIT_POLICIES:
             raise "unexpected init policy " + self.schedule_init_policy
         self.max_interval = 2  # default max interval is 2 seconds
-        self.schedule_url = app.conf.get("CELERY_REDIS_SCHEDULER_URL",
-                                         "redis://localhost:6379")
+        self.schedule_url = app.conf.get(BROKER_URL, "redis://localhost:6379")
         # using sentinels
         # supports 'sentinel://:pass@host:port/db
         if self.schedule_url.startswith('sentinel://'):
-            self.broker_transport_options = app.conf.get(
-                "CELERY_BROKER_TRANSPORT_OPTIONS", {"master_name": "mymaster"})
+            self.broker_transport_options = app.conf.get(BROKER_TRANSPORT_OPTIONS, default_transport_options)
             self.rdb = self.sentinel_connect(
                 self.broker_transport_options['master_name'])
         else:
             self.rdb = StrictRedis.from_url(self.schedule_url)
         Scheduler.__init__(self, *args, **kwargs)
-        app.add_task = partial(self.add, self)
+        app.add_task = self.add
 
-        self.multi_node = app.conf.get("CELERY_REDIS_MULTI_NODE_MODE", False)
+        self.multi_node = app.conf.get(MULTI_NODE_MODE, False)
         # how long we should hold on to the redis lock in seconds
         if self.multi_node:
-            self.lock_ttl = current_app.conf.get(
-                "CELERY_REDIS_SCHEDULER_LOCK_TTL", 30)
+            self.lock_ttl = app.conf.get(LOCK_TTL, 30)
             self._lock_acquired = False
             self._lock = self.rdb.lock(
                 'celery:beat:task_lock', timeout=self.lock_ttl)
@@ -99,11 +120,11 @@ class RedisScheduler(Scheduler):
         linfo('Current schedule:\n' + '\n'.join(
             str('task: ' + entry.task + '; each: ' + repr(entry.schedule))
             for entry in entries))
-        if self.schedule_init_policy != INIT_POLICY_DEFAULT:
+        if self.schedule_init_policy != DEFUALT_INIT_POLICY:
             for entry in entries:
-                next_run_time = self._calculate_next_run_time_with_init_policy(entry)
+                next_run_time, entry = self._calculate_next_run_time_with_init_policy(entry)
                 self.rdb.zrem(self.key, entry)
-                self.rdb.zadd(self.key, {jsonpickle.encode(entry): next_run_time})
+                self.rdb.zadd(self.key, {self.codec.encode(entry): next_run_time})
 
     def _calculate_next_run_time_with_init_policy(self, entry):
         if self.schedule_init_policy == INIT_POLICY_RESET:
@@ -138,6 +159,7 @@ class RedisScheduler(Scheduler):
 
         self.rdb.delete(self.key)
 
+        # TODO: here to apply the init policy
         for key in tasks:
             last_run_at = 0
             e = self.Entry(**dict(tasks[key], name=key, app=self.app))
@@ -145,14 +167,12 @@ class RedisScheduler(Scheduler):
                 # replace entry and remain old score
                 last_run_at = old_entries_dict[key][1]
                 del old_entries_dict[key]
-            self.rdb.zadd(self.key, {jsonpickle.encode(e): min(
-                last_run_at, self._when(e, e.is_due()[1]) or 0)})
+            self.rdb.zadd(self.key, {self.codec.encode(e): min(last_run_at, self._when(e, e.is_due()[1]) or 0)})
         debug("old_entries: %s", old_entries_dict)
         for key, tasks in old_entries_dict.items():
             debug("key: %s", key)
             debug("tasks: %s", tasks)
-            debug("zadd: %s", self.rdb.zadd(
-                self.key, {jsonpickle.encode(tasks[0]): tasks[1]}))
+            debug("zadd: %s", self.rdb.zadd(self.key, {self.codec.encode(tasks[0]): tasks[1]}))
         debug(self.rdb.zrange(self.key, 0, -1))
 
     def is_due(self, entry):
@@ -165,8 +185,7 @@ class RedisScheduler(Scheduler):
 
     def add(self, **kwargs):
         e = self.Entry(app=current_app, **kwargs)
-        self.rdb.zadd(self.key, {jsonpickle.encode(
-            e): self._when(e, e.is_due()[1]) or 0})
+        self.rdb.zadd(self.key, {self.codec.encode(e): self._when(e, e.is_due()[1]) or 0})
         return True
 
     def remove(self, task_key):
@@ -195,7 +214,8 @@ class RedisScheduler(Scheduler):
         tasks = self.rdb.zrangebyscore(
             self.key, 0,
             self.adjust(mktime(self.app.now().timetuple()), drift=0.010),
-            withscores=True) or []
+            withscores=True,
+        ) or []
 
         next_times = [self.max_interval, ]
 
@@ -213,10 +233,9 @@ class RedisScheduler(Scheduler):
                     error('Message Error: %s\n%s',
                           exc, traceback.format_stack(), exc_info=True)
                 else:
-                    debug('%s sent. id->%s', entry.task, result.id)
+                    debug('%s sent. id->%s', entry.task, result)
                 self.rdb.zrem(self.key, task)
-                self.rdb.zadd(self.key, {jsonpickle.encode(
-                    next_entry): self._when(next_entry, next_time_to_run) or 0})
+                self.rdb.zadd(self.key, {self.codec.encode(next_entry): self._when(next_entry, next_time_to_run) or 0})
 
         next_task = self.rdb.zrangebyscore(self.key, 0, -1, withscores=True, num=1, start=0)
         if not next_task:

@@ -14,9 +14,10 @@ redis_key = "celery:beat:order_tasks"
 min_redis_score = 0
 max_redis_score = 10000000000000000
 
-class TestStringMethods(unittest.TestCase):
-    def setUp(self) -> None:
-        super().setUp()
+class TestDynamicAddTasks(unittest.TestCase):
+    def setUp(self):
+        super(TestDynamicAddTasks, self).setUp()
+        
         self.redis_url = 'redis://localhost:6379'
         self.redis_cli = StrictRedis.from_url(self.redis_url)
         self.redis_cli.zpopmin(redis_key, count=1000)

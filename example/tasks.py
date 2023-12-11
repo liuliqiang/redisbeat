@@ -15,7 +15,7 @@ app = Celery('tasks', backend=redis_url, broker=redis_url)
 
 app.conf.update(CELERY_REDIS_SCHEDULER_URL = redis_url)
 
-if hostname == "beat":
+if hostname == "devops":
     app.conf.update(
         CELERYBEAT_SCHEDULE={
             'every-3-seconds': {
