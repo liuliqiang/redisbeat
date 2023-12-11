@@ -10,16 +10,21 @@ from redis import StrictRedis
 from redisbeat import RedisScheduler
 
 
+redis_key = "celery:beat:order_tasks"
+min_redis_score = 0
+max_redis_score = 10000000000000000
+
 class TestStringMethods(unittest.TestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        self.redis_url = 'redis://localhost:6379'
+        self.redis_cli = StrictRedis.from_url(self.redis_url)
+        self.redis_cli.zpopmin(redis_key, count=1000)
+
     def test_redisbeat(self):
-        redis_url = 'redis://localhost:6379'
-        hostname = os.getenv("HOSTNAME")
-        if hostname != "beat" and hostname != "worker":
-            redis_url = 'redis://localhost:6379'
+        app = Celery('tasks', backend=self.redis_url, broker=self.redis_url)
 
-        app = Celery('tasks', backend=redis_url, broker=redis_url)
-
-        app.conf.update(CELERY_REDIS_SCHEDULER_URL = redis_url)
+        app.conf.update(CELERY_REDIS_SCHEDULER_URL = self.redis_url)
         app.conf.update(
             CELERYBEAT_SCHEDULE={
                 'perminute': {
@@ -30,9 +35,8 @@ class TestStringMethods(unittest.TestCase):
             }
         )
 
-        scheduler = RedisScheduler(app=app)
-        redis_cli = StrictRedis.from_url(redis_url)
-        results = redis_cli.zrangebyscore("celery:beat:order_tasks", 0, 10000000000000000, withscores=True)
+        RedisScheduler(app=app)
+        results = self.redis_cli.zrangebyscore(redis_key, min_redis_score, max_redis_score, withscores=True)
         for result in results:
             print(result)
         self.assertEqual(len(results), 1)
