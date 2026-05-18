@@ -1,0 +1,113 @@
+# Redis Cluster example for redisbeat.
+#
+# Layout:
+#   - 6 redis-cluster nodes (3 masters + 3 replicas, Bitnami image).
+#   - One init container that bootstraps the cluster on first boot.
+#   - A standalone redis used as the Celery broker/backend
+#     (kombu / celery-redis does not speak the cluster protocol, so the
+#      broker is kept separate; only redisbeat's schedule storage uses
+#      the cluster).
+#   - worker + beat. Beat is configured with rediscluster:// so the
+#     SELECT-in-cluster-mode error from issue #43 no longer triggers.
+#
+# Run:
+#   docker compose up --build
+#
+# To re-bootstrap the cluster from scratch, also remove the volumes:
+#   docker compose down -v
+
+version: '3.8'
+
+x-redis-cluster-env: &redis-cluster-env
+  ALLOW_EMPTY_PASSWORD: "yes"
+  REDIS_NODES: "redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5"
+
+services:
+  redis-node-0:
+    image: docker.io/bitnami/redis-cluster:7.2
+    environment:
+      <<: *redis-cluster-env
+    volumes:
+      - redis-cluster_data-0:/bitnami/redis/data
+
+  redis-node-1:
+    image: docker.io/bitnami/redis-cluster:7.2
+    environment:
+      <<: *redis-cluster-env
+    volumes:
+      - redis-cluster_data-1:/bitnami/redis/data
+
+  redis-node-2:
+    image: docker.io/bitnami/redis-cluster:7.2
+    environment:
+      <<: *redis-cluster-env
+    volumes:
+      - redis-cluster_data-2:/bitnami/redis/data
+
+  redis-node-3:
+    image: docker.io/bitnami/redis-cluster:7.2
+    environment:
+      <<: *redis-cluster-env
+    volumes:
+      - redis-cluster_data-3:/bitnami/redis/data
+
+  redis-node-4:
+    image: docker.io/bitnami/redis-cluster:7.2
+    environment:
+      <<: *redis-cluster-env
+    volumes:
+      - redis-cluster_data-4:/bitnami/redis/data
+
+  redis-node-5:
+    image: docker.io/bitnami/redis-cluster:7.2
+    depends_on:
+      - redis-node-0
+      - redis-node-1
+      - redis-node-2
+      - redis-node-3
+      - redis-node-4
+    environment:
+      <<: *redis-cluster-env
+      REDIS_CLUSTER_REPLICAS: "1"
+      REDIS_CLUSTER_CREATOR: "yes"
+    volumes:
+      - redis-cluster_data-5:/bitnami/redis/data
+
+  # Standalone redis for celery broker/backend (cluster as a broker is not
+  # supported by kombu).
+  broker:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+    command: ["celery", "-A", "tasks", "worker", "-l", "INFO"]
+    depends_on:
+      - broker
+      - redis-node-5
+    environment:
+      CELERY_BROKER_URL: "redis://broker:6379/0"
+      CELERY_RESULT_BACKEND: "redis://broker:6379/0"
+
+  beat:
+    build:
+      context: .
+    command:
+      ["celery", "-A", "tasks", "beat", "-S", "redisbeat.RedisScheduler", "-l", "INFO"]
+    depends_on:
+      - worker
+      - redis-node-5
+    environment:
+      CELERY_BROKER_URL: "redis://broker:6379/0"
+      CELERY_RESULT_BACKEND: "redis://broker:6379/0"
+      # redisbeat schedule storage lives in the Redis Cluster.
+      CELERY_REDIS_SCHEDULER_URL: "rediscluster://redis-node-0:6379,redis-node-1:6379,redis-node-2:6379"
+
+volumes:
+  redis-cluster_data-0:
+  redis-cluster_data-1:
+  redis-cluster_data-2:
+  redis-cluster_data-3:
+  redis-cluster_data-4:
+  redis-cluster_data-5:

@@ -1,0 +1,4 @@
+celery>=5.3,<6
+redis>=4.1
+jsonpickle==3.3.0
+redisbeat
