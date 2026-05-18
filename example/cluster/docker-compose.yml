@@ -15,8 +15,11 @@
 #
 # To re-bootstrap the cluster from scratch, also remove the volumes:
 #   docker compose down -v
-
-version: '3.8'
+#
+# Note on the image: Bitnami moved community redis-cluster builds to the
+# bitnamilegacy/* namespace in Aug 2025; the original bitnami/redis-cluster
+# repo no longer publishes free tags. bitnamilegacy/redis-cluster:7.4 is the
+# closest drop-in.
 
 x-redis-cluster-env: &redis-cluster-env
   ALLOW_EMPTY_PASSWORD: "yes"
@@ -24,42 +27,42 @@ x-redis-cluster-env: &redis-cluster-env
 
 services:
   redis-node-0:
-    image: docker.io/bitnami/redis-cluster:7.2
+    image: docker.io/bitnamilegacy/redis-cluster:7.4
     environment:
       <<: *redis-cluster-env
     volumes:
       - redis-cluster_data-0:/bitnami/redis/data
 
   redis-node-1:
-    image: docker.io/bitnami/redis-cluster:7.2
+    image: docker.io/bitnamilegacy/redis-cluster:7.4
     environment:
       <<: *redis-cluster-env
     volumes:
       - redis-cluster_data-1:/bitnami/redis/data
 
   redis-node-2:
-    image: docker.io/bitnami/redis-cluster:7.2
+    image: docker.io/bitnamilegacy/redis-cluster:7.4
     environment:
       <<: *redis-cluster-env
     volumes:
       - redis-cluster_data-2:/bitnami/redis/data
 
   redis-node-3:
-    image: docker.io/bitnami/redis-cluster:7.2
+    image: docker.io/bitnamilegacy/redis-cluster:7.4
     environment:
       <<: *redis-cluster-env
     volumes:
       - redis-cluster_data-3:/bitnami/redis/data
 
   redis-node-4:
-    image: docker.io/bitnami/redis-cluster:7.2
+    image: docker.io/bitnamilegacy/redis-cluster:7.4
     environment:
       <<: *redis-cluster-env
     volumes:
       - redis-cluster_data-4:/bitnami/redis/data
 
   redis-node-5:
-    image: docker.io/bitnami/redis-cluster:7.2
+    image: docker.io/bitnamilegacy/redis-cluster:7.4
     depends_on:
       - redis-node-0
       - redis-node-1
