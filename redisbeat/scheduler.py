@@ -101,6 +101,11 @@ class RedisScheduler(Scheduler):
             self.broker_transport_options = app.conf.get(BROKER_TRANSPORT_OPTIONS, default_transport_options)
             self.rdb = self.sentinel_connect(
                 self.broker_transport_options['master_name'])
+        elif self.schedule_url.startswith('rediscluster://'):
+            # Redis Cluster: SELECT is not supported, so any db component in
+            # the URL is ignored. Format:
+            #   rediscluster://[[user]:password@]host1:port1[,host2:port2,...]
+            self.rdb = self.cluster_connect()
         else:
             self.rdb = StrictRedis.from_url(self.schedule_url)
         Scheduler.__init__(self, *args, **kwargs)
@@ -289,6 +294,69 @@ class RedisScheduler(Scheduler):
             except LockError:
                 pass
         self.sync()
+
+    def cluster_connect(self):
+        """Connect to a Redis Cluster.
+
+        Supported URL format::
+
+            rediscluster://[[user]:password@]host1:port1[,host2:port2,...]
+
+        Notes:
+        - Cluster only supports DB 0; any path component in the URL is ignored.
+        - Requires redis-py >= 4.1, which ships ``redis.cluster.RedisCluster``.
+        """
+        try:
+            from redis.cluster import RedisCluster, ClusterNode
+        except ImportError as exc:
+            raise ImportError(
+                "Redis Cluster support requires redis-py>=4.1; "
+                "install with `pip install 'redis>=4.1'`."
+            )
+
+        url = urlparse.urlparse(self.schedule_url)
+
+        if '@' in url.netloc:
+            auth, hostspec = url.netloc.split('@', 1)
+        else:
+            auth = None
+            hostspec = url.netloc
+
+        username = None
+        password = None
+        if auth:
+            if ':' in auth:
+                username, password = auth.split(':', 1)
+                username = username or None
+                password = password or None
+            else:
+                password = auth
+
+        def _parse_host(s):
+            if ':' in s:
+                host, port = s.rsplit(':', 1)
+                port = int(port)
+            else:
+                host = s
+                port = 6379
+            return host, port
+
+        startup_nodes = [
+            ClusterNode(host, port)
+            for host, port in (_parse_host(s) for s in hostspec.split(',') if s)
+        ]
+        if not startup_nodes:
+            raise ValueError(
+                "rediscluster URL must include at least one host: %s"
+                % self.schedule_url)
+
+        kwargs = {}
+        if username is not None:
+            kwargs['username'] = username
+        if password is not None:
+            kwargs['password'] = password
+
+        return RedisCluster(startup_nodes=startup_nodes, **kwargs)
 
     def sentinel_connect(self, master_name):
         url = urlparse.urlparse(self.schedule_url)
