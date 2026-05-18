@@ -29,7 +29,8 @@ or you can install from source by cloning this repository:
 
 `redisbeat` provides Docker demos under the `example/` folder, one per supported Redis topology:
 
-- `example/standalone/` — single Redis node
+- `example/standalone/` — single Redis node, celery 5 (Python 3.11)
+- `example/celery4/` — single Redis node, celery 4.x (Python 3.8) for legacy stacks
 - `example/cluster/` — 6-node Redis Cluster (3 masters + 3 replicas), see the [Redis Cluster mode](#redis-cluster-mode) section below
 
 To run the standalone demo:
