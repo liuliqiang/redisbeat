@@ -1,5 +1,3 @@
-version: '2'
-
 services:
 
   worker:
@@ -8,7 +6,7 @@ services:
     restart: unless-stopped
     build:
       context: .
-    command: [ "celery", "worker", "-A", "tasks", "-l", "INFO" ]
+    command: ["celery", "-A", "tasks", "worker", "-l", "INFO"]
     depends_on:
       - redis
     stdin_open: true
@@ -21,16 +19,7 @@ services:
     build:
       context: .
     command:
-      [
-        "celery",
-        "beat",
-        "-A",
-        "tasks",
-        "-S",
-        "redisbeat.RedisScheduler",
-        "-l",
-        "INFO"
-      ]
+      ["celery", "-A", "tasks", "beat", "-S", "redisbeat.RedisScheduler", "-l", "INFO"]
     depends_on:
       - worker
       - redis
