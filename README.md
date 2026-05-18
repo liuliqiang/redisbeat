@@ -13,6 +13,44 @@ And you can add scheduler task dynamically when you need to add scheduled task.
 2. Dynamically add/remove/modify tasks.
 
 
+# Upgrade notes — READ BEFORE UPGRADING
+
+> **redisbeat persists each schedule entry as a `jsonpickle`-serialized `celery.beat.ScheduleEntry` blob.** When the underlying `jsonpickle`, Python, or Celery version changes, the new code may fail to decode blobs written by the old version. The decode loop in `merge_inplace` has no graceful fallback today, so a single undecodable blob can prevent beat from starting.
+
+**Pre-upgrade ritual (recommended for any non-trivial version jump):**
+
+```bash
+# 1. Snapshot first so you can roll back
+redis-cli --rdb /tmp/redisbeat.rdb
+
+# 2. Drop the schedule key so the new redisbeat reseeds it on first boot
+redis-cli del celery:beat:order_tasks
+```
+
+## Static vs dynamic tasks
+
+- **Static tasks (declared in `CELERYBEAT_SCHEDULE`)** — re-encoded with the *current* `jsonpickle` on every beat startup, with `last_run_at` preserved. **They self-heal across upgrades.**
+- **Dynamic tasks (added at runtime via `RedisScheduler.add(...)`)** — live only in Redis. If the new code can't decode them, beat won't start, and there is no source-of-truth to rebuild from.
+
+## Risk by upgrade path
+
+| Path | Risk | Reason |
+|---|---|---|
+| `jsonpickle 3.0.0 → 3.3.0` (same Python) | low | same major, wire format stable |
+| `jsonpickle 1.x / 2.x → 3.x` | medium | wire-format drift across major versions; some payloads no longer decode |
+| Python 2.7 → Python 3 | **high** | old blobs reference `__builtin__.unicode` etc., absent on Py3 |
+| celery 4 → celery 5 | **high** | celery 5 uses `zoneinfo`; old blobs reference `pytz.UTC` |
+| standalone Redis → Redis Cluster | n/a | different Redis instance — old data isn't even visible; re-`add()` dynamic tasks manually |
+
+## Recovery if beat refuses to start after an upgrade
+
+```bash
+redis-cli del celery:beat:order_tasks
+```
+
+Static tasks from `CELERYBEAT_SCHEDULE` repopulate on the next boot. Dynamic tasks are lost — re-`add()` them.
+
+
 # Installation
 
 `redisbeat` can be easily installed using setuptools or pip.
@@ -27,10 +65,16 @@ or you can install from source by cloning this repository:
 
 # Docker-compose demo
 
-`redisbeat` provides a Docker demo in example folder that you can use:
+`redisbeat` provides Docker demos under the `example/` folder, one per supported Redis topology:
+
+- `example/standalone/` — single Redis node, celery 5 (Python 3.11)
+- `example/celery4/` — single Redis node, celery 4.x (Python 3.8) for legacy stacks
+- `example/cluster/` — 6-node Redis Cluster (3 masters + 3 replicas), see the [Redis Cluster mode](#redis-cluster-mode) section below
+
+To run the standalone demo:
 
 ```
-# cd redisbeat/example
+# cd redisbeat/example/standalone
 # docker-compose up -d
 ```
 
@@ -176,6 +220,29 @@ CELERYBEAT_SCHEDULE = {
         'args': (1, 1)
     }
 }
+```
+
+# Redis Cluster mode
+
+If your Redis runs in cluster mode, use the `rediscluster://` URL scheme so redisbeat connects via `redis.cluster.RedisCluster` instead of the standalone client (the latter issues `SELECT`, which Redis Cluster rejects — see issue #43).
+
+```python
+CELERY_REDIS_SCHEDULER_URL = "rediscluster://host1:7000,host2:7001,host3:7002"
+```
+
+Supported URL forms:
+
+```
+rediscluster://host1:port1[,host2:port2,...]
+rediscluster://:password@host1:port1[,host2:port2,...]
+rediscluster://user:password@host1:port1[,host2:port2,...]
+```
+
+Requires `redis-py >= 4.1`. A full docker-compose stack with a 6-node cluster lives at `example/cluster/`:
+
+```
+# cd redisbeat/example/cluster
+# docker compose up --build
 ```
 
 ### Multiple node support

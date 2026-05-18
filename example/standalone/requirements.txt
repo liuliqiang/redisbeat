@@ -1,0 +1,6 @@
+celery>=5.3,<6
+redis>=4.1
+jsonpickle>=3.3.0
+# redisbeat itself is installed from local source in the Dockerfile, so
+# the example always exercises the in-tree code rather than PyPI's
+# released version.

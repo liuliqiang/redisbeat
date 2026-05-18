@@ -1,0 +1,46 @@
+# Standalone redisbeat example pinned to celery 4.x.
+#
+# This is the legacy companion to ../standalone/ (which targets
+# celery 5). Use this if you're stuck on celery 4 -- everything else
+# (redisbeat, jsonpickle, Python 3.8) is the same shape.
+#
+# Run:
+#   docker compose up -d
+
+services:
+
+  worker:
+    container_name: worker-celery4
+    hostname: worker
+    restart: unless-stopped
+    build:
+      context: ../..
+      dockerfile: example/celery4/Dockerfile
+    # celery 4 accepts -A as a subcommand option (the syntax removed in
+    # celery 5).
+    command: ["celery", "worker", "-A", "tasks", "-l", "INFO"]
+    depends_on:
+      - redis
+    stdin_open: true
+    tty: true
+
+  beat:
+    container_name: beat-celery4
+    hostname: beat
+    restart: unless-stopped
+    build:
+      context: ../..
+      dockerfile: example/celery4/Dockerfile
+    command:
+      ["celery", "beat", "-A", "tasks", "-S", "redisbeat.RedisScheduler", "-l", "INFO"]
+    depends_on:
+      - worker
+      - redis
+    stdin_open: true
+    tty: true
+
+  redis:
+    container_name: redis-celery4
+    hostname: redis
+    restart: unless-stopped
+    image: redis:7-alpine
