@@ -27,10 +27,15 @@ or you can install from source by cloning this repository:
 
 # Docker-compose demo
 
-`redisbeat` provides a Docker demo in example folder that you can use:
+`redisbeat` provides Docker demos under the `example/` folder, one per supported Redis topology:
+
+- `example/standalone/` — single Redis node
+- `example/cluster/` — 6-node Redis Cluster (3 masters + 3 replicas), see the [Redis Cluster mode](#redis-cluster-mode) section below
+
+To run the standalone demo:
 
 ```
-# cd redisbeat/example
+# cd redisbeat/example/standalone
 # docker-compose up -d
 ```
 
@@ -176,6 +181,29 @@ CELERYBEAT_SCHEDULE = {
         'args': (1, 1)
     }
 }
+```
+
+# Redis Cluster mode
+
+If your Redis runs in cluster mode, use the `rediscluster://` URL scheme so redisbeat connects via `redis.cluster.RedisCluster` instead of the standalone client (the latter issues `SELECT`, which Redis Cluster rejects — see issue #43).
+
+```python
+CELERY_REDIS_SCHEDULER_URL = "rediscluster://host1:7000,host2:7001,host3:7002"
+```
+
+Supported URL forms:
+
+```
+rediscluster://host1:port1[,host2:port2,...]
+rediscluster://:password@host1:port1[,host2:port2,...]
+rediscluster://user:password@host1:port1[,host2:port2,...]
+```
+
+Requires `redis-py >= 4.1`. A full docker-compose stack with a 6-node cluster lives at `example/cluster/`:
+
+```
+# cd redisbeat/example/cluster
+# docker compose up --build
 ```
 
 ### Multiple node support
