@@ -92,6 +92,9 @@ setup(
     # requirements files see:
     # https://packaging.python.org/en/latest/requirements.html
     install_requires=[
-        'jsonpickle==3.0.0',
+        # jsonpickle 3.2.0 fixed a regression that crashed decoding of
+        # celery ScheduleEntry payloads on Python 3.11+ (see issue #42).
+        # 3.0.0 / 3.1.0 are known-broken; everything from 3.2.0 works.
+        'jsonpickle>=3.3.0',
     ]
 )
