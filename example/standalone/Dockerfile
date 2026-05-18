@@ -1,10 +1,16 @@
 FROM python:3.11-alpine
 WORKDIR /usr/src/app
 
-# Bumped from python:2.7-alpine. Py2.7 went EOL in 2020 and can't install
-# the post-#42 jsonpickle (3.x is Py3-only) or celery 5.x.
+# Build context is the repository root (see docker-compose.yml) so we can
+# install redisbeat directly from local source. PyPI's redisbeat==1.2.7
+# still has a buggy `debug(..., str(task))` log call that spams
+# "TypeError: not all arguments converted during string formatting".
 
-COPY requirements.txt ./
+COPY example/standalone/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . /usr/src/app
+COPY setup.py /usr/src/redisbeat/
+COPY redisbeat /usr/src/redisbeat/redisbeat
+RUN pip install --no-cache-dir --no-deps /usr/src/redisbeat
+
+COPY example/standalone/tasks.py example/standalone/add_task.py example/standalone/rem_task.py ./

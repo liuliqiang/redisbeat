@@ -5,7 +5,8 @@ services:
     hostname: worker
     restart: unless-stopped
     build:
-      context: .
+      context: ../..
+      dockerfile: example/standalone/Dockerfile
     command: ["celery", "-A", "tasks", "worker", "-l", "INFO"]
     depends_on:
       - redis
@@ -17,7 +18,8 @@ services:
     hostname: beat
     restart: unless-stopped
     build:
-      context: .
+      context: ../..
+      dockerfile: example/standalone/Dockerfile
     command:
       ["celery", "-A", "tasks", "beat", "-S", "redisbeat.RedisScheduler", "-l", "INFO"]
     depends_on:
