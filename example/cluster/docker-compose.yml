@@ -84,7 +84,8 @@ services:
 
   worker:
     build:
-      context: .
+      context: ../..
+      dockerfile: example/cluster/Dockerfile
     command: ["celery", "-A", "tasks", "worker", "-l", "INFO"]
     depends_on:
       - broker
@@ -95,7 +96,8 @@ services:
 
   beat:
     build:
-      context: .
+      context: ../..
+      dockerfile: example/cluster/Dockerfile
     command:
       ["celery", "-A", "tasks", "beat", "-S", "redisbeat.RedisScheduler", "-l", "INFO"]
     depends_on:

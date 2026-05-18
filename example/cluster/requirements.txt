@@ -1,4 +1,5 @@
 celery>=5.3,<6
 redis>=4.1
 jsonpickle==3.3.0
-redisbeat
+# redisbeat itself is installed from local source in the Dockerfile,
+# because the rediscluster:// support is not on PyPI yet.
