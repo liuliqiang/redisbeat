@@ -21,7 +21,7 @@ root.addHandler(handler)
 if __name__ == "__main__":
     schduler = RedisScheduler(app=app, skip_init=True)
     schduler.add(**{
-        'name': 'sub-perminute',
+        'name': 'sub-every-3-seconds',
         'task': 'tasks.sub',
         'schedule': timedelta(seconds=3),
         'args': (1, 1)

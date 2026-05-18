@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # Copyright 2014 Kong Luoxing
 
@@ -11,9 +12,8 @@
 # use this file except in compliance with the License. You may obtain a copy
 # of the License at http://www.apache.org/licenses/LICENSE-2.0
 
-from functools import partial
-import jsonpickle
 import sys
+import jsonpickle
 from time import mktime
 import traceback
 
@@ -28,96 +28,185 @@ try:
 except ImportError:
     import urlparse
 
-logger = get_logger(__name__)
-debug, linfo, error, warning = (logger.debug, logger.info, logger.error,
-                                logger.warning)
 try:
     MAXINT = sys.maxint
 except AttributeError:
     # python3
     MAXINT = sys.maxsize
 
+from redisbeat.constants import (
+    INIT_POLICIES,
+    INIT_POLICY_DEFAULT,
+    INIT_POLICY_IMMEDIATELY,
+    INIT_POLICY_RESET,
+    INIT_POLICY_FAST_FORWARD,
+    CONFIG_INIT_POLICY,
+    BROKER_URL,
+    BROKER_KEY,
+    BROKER_TRANSPORT_OPTIONS,
+    MULTI_NODE_MODE,
+    LOCK_TTL,
+)
+
+
+logger = get_logger(__name__)
+debug, linfo, error, warning = (logger.debug, logger.info, logger.error,
+                                logger.warning)
+
+default_transport_options = {
+    "master_name": "mymaster",
+}
+default_broker_key = "celery:beat:order_tasks"
+
+
+class EncodeException(Exception):
+    pass
+
+class TaskNotExistsException(Exception):
+    pass
+
+class Codec(object):
+    """
+    Codec is used to encode and decode task entry
+    The default codec is jsonpickle
+    """
+    def encode(self, obj):
+        encode_obj = jsonpickle.encode(obj)
+        if encode_obj is None:
+            raise EncodeException("encode obj is None")
+        return encode_obj
+
+    def decode(self, obj):
+        return jsonpickle.decode(obj)
+
 
 class RedisScheduler(Scheduler):
     def __init__(self, *args, **kwargs):
         app = kwargs['app']
         self.skip_init = kwargs.get('skip_init', False)
-        self.key = app.conf.get("CELERY_REDIS_SCHEDULER_KEY",
-                                "celery:beat:order_tasks")
+
+        self.codec = Codec()
+
+        self.key = app.conf.get(BROKER_KEY, default_broker_key)
+        self.schedule_init_policy = app.conf.get(CONFIG_INIT_POLICY, INIT_POLICY_DEFAULT)
+        if self.schedule_init_policy not in INIT_POLICIES:
+            raise ValueError(
+                "unexpected init policy '{0}', expected one of {1}".format(
+                    self.schedule_init_policy, INIT_POLICIES))
         self.max_interval = 2  # default max interval is 2 seconds
-        self.schedule_url = app.conf.get("CELERY_REDIS_SCHEDULER_URL",
-                                         "redis://localhost:6379")
+        self.schedule_url = app.conf.get(BROKER_URL, "redis://localhost:6379")
         # using sentinels
         # supports 'sentinel://:pass@host:port/db
         if self.schedule_url.startswith('sentinel://'):
-            self.broker_transport_options = app.conf.get(
-                "CELERY_BROKER_TRANSPORT_OPTIONS", {"master_name": "mymaster"})
+            self.broker_transport_options = app.conf.get(BROKER_TRANSPORT_OPTIONS, default_transport_options)
             self.rdb = self.sentinel_connect(
                 self.broker_transport_options['master_name'])
         else:
             self.rdb = StrictRedis.from_url(self.schedule_url)
         Scheduler.__init__(self, *args, **kwargs)
-        app.add_task = partial(self.add, self)
+        app.add_task = self.add
 
-        self.multi_node = app.conf.get("CELERY_REDIS_MULTI_NODE_MODE", False)
+        self.multi_node = app.conf.get(MULTI_NODE_MODE, False)
         # how long we should hold on to the redis lock in seconds
         if self.multi_node:
-            self.lock_ttl = current_app.conf.get(
-                "CELERY_REDIS_SCHEDULER_LOCK_TTL", 30)
+            self.lock_ttl = app.conf.get(LOCK_TTL, 30)
             self._lock_acquired = False
             self._lock = self.rdb.lock(
                 'celery:beat:task_lock', timeout=self.lock_ttl)
             self._lock_acquired = self._lock.acquire(blocking=False)
-
+        
     def _remove_db(self):
         linfo("remove db now")
         self.rdb.delete(self.key)
 
-    def _when(self, entry, next_time_to_run):
-        return mktime(entry.schedule.now().timetuple()) + (self.adjust(next_time_to_run) or 0)
+    def _when(self, entry, next_run_time):
+        return mktime(entry.schedule.now().timetuple()) + (self.adjust(next_run_time) or 0)
 
     def setup_schedule(self):
         debug("setup schedule, skip_init: %s", self.skip_init)
         if self.skip_init:
             return
+        
+        # if the tasks in config not exists in db, add it to db
+        self.merge_inplace(self.app.conf['CELERYBEAT_SCHEDULE'])
+
         # init entries
-        self.merge_inplace(self.app.conf.CELERYBEAT_SCHEDULE)
-        tasks = [jsonpickle.decode(entry)
-                 for entry in self.rdb.zrange(self.key, 0, -1)]
-        linfo('Current schedule:\n' + '\n'.join(
-              str('task: ' + entry.task + '; each: ' + repr(entry.schedule))
-              for entry in tasks))
+        # entries = [jsonpickle.decode(task) for task in self.rdb.zrange(self.key, 0, -1)]
+        entries = self.rdb.zrange(self.key, 0, MAXINT)
+        # linfo('Current schedule:\n' + '\n'.join(
+            # str('task: ' + entry.task + '; each: ' + repr(entry.schedule))
+            # for entry in entries))
+        for entry in entries:
+            decode_task = self.codec.decode(entry)
+            linfo("checking task entry(%s): %s", decode_task.name, decode_task.schedule)
+            next_run_interval, new_task = self._calculate_next_run_time_with_init_policy(decode_task)
+            next_run_time = self._when(new_task, next_run_interval)
 
+            self.rdb.zrem(self.key, entry)
+            self.rdb.zadd(self.key, {self.codec.encode(new_task): next_run_time})
+    
     def merge_inplace(self, tasks):
-        old_entries = self.rdb.zrangebyscore(
-            self.key, 0, MAXINT, withscores=True)
+        """Reconcile in-memory schedule config with what's persisted in Redis.
+
+        Strategy:
+        - Tasks present in both config and Redis: replace stored payload with the
+          one rebuilt from current config (so schedule/args edits take effect),
+          but preserve ``last_run_at`` so the init policy can detect missed runs.
+        - Tasks new in config: add fresh.
+        - Tasks present only in Redis (e.g. added via :meth:`add` at runtime) are
+          left alone; we don't have enough information here to decide they are
+          stale.
+        """
+        old_entries = self.rdb.zrangebyscore(self.key, 0, MAXINT, withscores=True)
         old_entries_dict = dict({})
-        for task, score in old_entries:
-            if not task:
-                break
-            debug("ready to load old_entries: %s", str(task))
-            entry = jsonpickle.decode(task)
-            old_entries_dict[entry.name] = (entry, score)
+        for task_blob, score in old_entries:
+            if not task_blob:
+                continue
+            debug("ready to load old_entries: %s", task_blob)
+            entry = self.codec.decode(task_blob)
+            old_entries_dict[entry.name] = (entry, score, task_blob)
         debug("old_entries: %s", old_entries_dict)
 
-        self.rdb.delete(self.key)
+        for task_name, task in tasks.items():
+            e = self.Entry(**dict(task, name=task_name, app=self.app))
+            if task_name in old_entries_dict:
+                old_entry, _old_score, old_blob = old_entries_dict[task_name]
+                # Preserve last_run_at so init policies can detect missed runs.
+                e.last_run_at = old_entry.last_run_at
+                # Drop the previous payload; schedule/args may have changed.
+                self.rdb.zrem(self.key, old_blob)
+            _, next_run_interval = e.is_due()
+            next_run_time = self._when(e, next_run_interval)
+            linfo("add task entry: %s, next_run_time:%s to db",
+                  task_name, next_run_time)
+            self.rdb.zadd(self.key, {self.codec.encode(e): next_run_time})
 
-        for key in tasks:
-            last_run_at = 0
-            e = self.Entry(**dict(tasks[key], name=key, app=self.app))
-            if key in old_entries_dict:
-                # replace entry and remain old score
-                last_run_at = old_entries_dict[key][1]
-                del old_entries_dict[key]
-            self.rdb.zadd(self.key, {jsonpickle.encode(e): min(
-                last_run_at, self._when(e, e.is_due()[1]) or 0)})
-        debug("old_entries: %s", old_entries_dict)
-        for key, tasks in old_entries_dict.items():
-            debug("key: %s", key)
-            debug("tasks: %s", tasks)
-            debug("zadd: %s", self.rdb.zadd(
-                self.key, {jsonpickle.encode(tasks[0]): tasks[1]}))
-        debug(self.rdb.zrange(self.key, 0, -1))
+    def _calculate_next_run_time_with_init_policy(self, entry):
+        if self.schedule_init_policy == INIT_POLICY_RESET:
+            # Pretend the task just ran: next run is one full interval from now.
+            entry.last_run_at = entry.default_now()
+            _, next_run_time = entry.is_due()
+            return next_run_time, entry
+        elif self.schedule_init_policy == INIT_POLICY_IMMEDIATELY:
+            # Fire every task now and let the post-run advancement take over.
+            entry.last_run_at = entry.default_now()
+            return 0, entry
+        elif self.schedule_init_policy == INIT_POLICY_FAST_FORWARD:
+            should_run_now, next_run_time = entry.is_due()
+            if not should_run_now:
+                return next_run_time, entry
+            # Collapse all missed runs into a single immediate run. By setting
+            # ``last_run_at`` to one interval ago we guarantee exactly one
+            # outstanding run, after which normal cadence resumes.
+            run_every = getattr(entry.schedule, 'run_every', None)
+            if run_every is not None:
+                entry.last_run_at = entry.default_now() - run_every
+            return 0, entry
+        else:  # INIT_POLICY_DEFAULT
+            # Leave ``last_run_at`` untouched; tick() will replay each missed
+            # run one interval at a time.
+            _, next_run_time = entry.is_due()
+            return next_run_time, entry
 
     def is_due(self, entry):
         return entry.is_due()
@@ -129,14 +218,15 @@ class RedisScheduler(Scheduler):
 
     def add(self, **kwargs):
         e = self.Entry(app=current_app, **kwargs)
-        self.rdb.zadd(self.key, {jsonpickle.encode(
-            e): self._when(e, e.is_due()[1]) or 0})
+        _, next_run_interval = e.is_due()
+        next_run_time = self._when(e, next_run_interval)
+        self.rdb.zadd(self.key, {self.codec.encode(e): next_run_time})
         return True
 
     def remove(self, task_key):
-        tasks = self.rdb.zrange(self.key, 0, -1) or []
+        tasks = self.rdb.zrange(self.key, 0, MAXINT) or []
         for idx, task in enumerate(tasks):
-            entry = jsonpickle.decode(task)
+            entry = self.codec.decode(task)
             if entry.name == task_key:
                 self.rdb.zremrangebyrank(self.key, idx, idx)
                 return True
@@ -144,12 +234,12 @@ class RedisScheduler(Scheduler):
             return False
 
     def list(self):
-        return [jsonpickle.decode(entry) for entry in self.rdb.zrange(self.key, 0, -1)]
+        return [self.codec.decode(entry) for entry in self.rdb.zrange(self.key, 0, MAXINT)]
 
     def get(self, task_key):
-        tasks = self.rdb.zrange(self.key, 0, -1) or []
+        tasks = self.rdb.zrange(self.key, 0, MAXINT) or []
         for idx, task in enumerate(tasks):
-            entry = jsonpickle.decode(task)
+            entry = self.codec.decode(task)
             if entry.name == task_key:
                 return entry
         else:
@@ -159,15 +249,16 @@ class RedisScheduler(Scheduler):
         tasks = self.rdb.zrangebyscore(
             self.key, 0,
             self.adjust(mktime(self.app.now().timetuple()), drift=0.010),
-            withscores=True) or []
+            withscores=True,
+        ) or []
 
         next_times = [self.max_interval, ]
 
-        for task, score in tasks:
-            entry = jsonpickle.decode(task)
-            is_due, next_time_to_run = self.is_due(entry)
+        for task, _ in tasks:
+            entry = self.codec.decode(task)
+            is_due, next_run_time = self.is_due(entry)
 
-            next_times.append(next_time_to_run)
+            next_times.append(next_run_time)
             if is_due:
                 next_entry = self.reserve(entry)
                 try:
@@ -177,17 +268,15 @@ class RedisScheduler(Scheduler):
                     error('Message Error: %s\n%s',
                           exc, traceback.format_stack(), exc_info=True)
                 else:
-                    debug('%s sent. id->%s', entry.task, result.id)
+                    debug('%s sent. id->%s', entry.task, result)
                 self.rdb.zrem(self.key, task)
-                self.rdb.zadd(self.key, {jsonpickle.encode(
-                    next_entry): self._when(next_entry, next_time_to_run) or 0})
+                self.rdb.zadd(self.key, {self.codec.encode(next_entry): self._when(next_entry, next_run_time) or 0})
 
-        next_task = self.rdb.zrangebyscore(
-            self.key, 0, MAXINT, withscores=True, num=1, start=0)
+        next_task = self.rdb.zrangebyscore(self.key, 0, MAXINT, withscores=True, num=1, start=0)
         if not next_task:
             linfo("no next task found")
             return min(next_times)
-        entry = jsonpickle.decode(next_task[0][0])
+        entry = self.codec.decode(next_task[0][0])
         next_times.append(self.is_due(entry)[1])
 
         return min(next_times)
