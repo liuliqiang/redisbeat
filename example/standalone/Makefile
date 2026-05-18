@@ -2,10 +2,10 @@
 .PHONY: worker beat
 
 worker:
-	celery worker -A tasks -l INFO
+	celery -A tasks worker -l INFO
 
 beat:
-	celery beat -A tasks -S redisbeat.RedisScheduler -l DEBUG	
+	celery -A tasks beat -S redisbeat.RedisScheduler -l DEBUG
 
 add_task:
 	python add_task.py
