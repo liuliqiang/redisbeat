@@ -32,6 +32,15 @@ services:
       <<: *redis-cluster-env
     volumes:
       - redis-cluster_data-0:/bitnami/redis/data
+    # Probes the cluster-wide state. Once redis-node-5 finishes the
+    # `redis-cli --cluster create` bootstrap, every node returns
+    # cluster_state:ok and dependent services may safely start.
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -p 6379 cluster info | grep -q cluster_state:ok"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
 
   redis-node-1:
     image: docker.io/bitnamilegacy/redis-cluster:7.4
@@ -88,8 +97,10 @@ services:
       dockerfile: example/cluster/Dockerfile
     command: ["celery", "-A", "tasks", "worker", "-l", "INFO"]
     depends_on:
-      - broker
-      - redis-node-5
+      broker:
+        condition: service_started
+      redis-node-0:
+        condition: service_healthy
     environment:
       CELERY_BROKER_URL: "redis://broker:6379/0"
       CELERY_RESULT_BACKEND: "redis://broker:6379/0"
@@ -101,8 +112,10 @@ services:
     command:
       ["celery", "-A", "tasks", "beat", "-S", "redisbeat.RedisScheduler", "-l", "INFO"]
     depends_on:
-      - worker
-      - redis-node-5
+      worker:
+        condition: service_started
+      redis-node-0:
+        condition: service_healthy
     environment:
       CELERY_BROKER_URL: "redis://broker:6379/0"
       CELERY_RESULT_BACKEND: "redis://broker:6379/0"
