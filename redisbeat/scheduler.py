@@ -127,6 +127,14 @@ class RedisScheduler(Scheduler):
     def _when(self, entry, next_run_time):
         return mktime(entry.schedule.now().timetuple()) + (self.adjust(next_run_time) or 0)
 
+    def _decode_or_drop(self, task_blob):
+        try:
+            return self.codec.decode(task_blob)
+        except Exception as exc:
+            error("dropping undecodable schedule entry: %s", exc)
+            self.rdb.zrem(self.key, task_blob)
+            return None
+
     def setup_schedule(self):
         debug("setup schedule, skip_init: %s", self.skip_init)
         if self.skip_init:
@@ -142,7 +150,9 @@ class RedisScheduler(Scheduler):
             # str('task: ' + entry.task + '; each: ' + repr(entry.schedule))
             # for entry in entries))
         for entry in entries:
-            decode_task = self.codec.decode(entry)
+            decode_task = self._decode_or_drop(entry)
+            if decode_task is None:
+                continue
             linfo("checking task entry(%s): %s", decode_task.name, decode_task.schedule)
             next_run_interval, new_task = self._calculate_next_run_time_with_init_policy(decode_task)
             next_run_time = self._when(new_task, next_run_interval)
@@ -168,7 +178,9 @@ class RedisScheduler(Scheduler):
             if not task_blob:
                 continue
             debug("ready to load old_entries: %s", task_blob)
-            entry = self.codec.decode(task_blob)
+            entry = self._decode_or_drop(task_blob)
+            if entry is None:
+                continue
             old_entries_dict[entry.name] = (entry, score, task_blob)
         debug("old_entries: %s", old_entries_dict)
 
