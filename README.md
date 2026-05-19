@@ -15,7 +15,7 @@ And you can add scheduler task dynamically when you need to add scheduled task.
 
 # Upgrade notes — READ BEFORE UPGRADING
 
-> **redisbeat persists each schedule entry as a `jsonpickle`-serialized `celery.beat.ScheduleEntry` blob.** When the underlying `jsonpickle`, Python, or Celery version changes, the new code may fail to decode blobs written by the old version. The decode loop in `merge_inplace` has no graceful fallback today, so a single undecodable blob can prevent beat from starting.
+> **redisbeat persists each schedule entry as a `jsonpickle`-serialized `celery.beat.ScheduleEntry` blob.** When the underlying `jsonpickle`, Python, or Celery version changes, the new code may fail to decode blobs written by the old version. Older redisbeat releases had no graceful fallback in the decode loops, so a single undecodable blob could prevent beat from starting. Current redisbeat drops undecodable blobs during startup and continues with the remaining schedule entries.
 
 **Pre-upgrade ritual (recommended for any non-trivial version jump):**
 
@@ -30,7 +30,7 @@ redis-cli del celery:beat:order_tasks
 ## Static vs dynamic tasks
 
 - **Static tasks (declared in `CELERYBEAT_SCHEDULE`)** — re-encoded with the *current* `jsonpickle` on every beat startup, with `last_run_at` preserved. **They self-heal across upgrades.**
-- **Dynamic tasks (added at runtime via `RedisScheduler.add(...)`)** — live only in Redis. If the new code can't decode them, beat won't start, and there is no source-of-truth to rebuild from.
+- **Dynamic tasks (added at runtime via `RedisScheduler.add(...)`)** — live only in Redis. If the new code cannot decode them, redisbeat drops those undecodable dynamic entries and continues; there is no source-of-truth to rebuild dropped dynamic entries from.
 
 ## Risk by upgrade path
 
@@ -48,7 +48,7 @@ redis-cli del celery:beat:order_tasks
 redis-cli del celery:beat:order_tasks
 ```
 
-Static tasks from `CELERYBEAT_SCHEDULE` repopulate on the next boot. Dynamic tasks are lost — re-`add()` them.
+Static tasks from `CELERYBEAT_SCHEDULE` repopulate on the next boot. Undecodable dynamic tasks are dropped during startup — re-`add()` them if needed.
 
 
 # Installation
