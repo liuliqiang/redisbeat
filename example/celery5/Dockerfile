@@ -6,11 +6,11 @@ WORKDIR /usr/src/app
 # still has a buggy `debug(..., str(task))` log call that spams
 # "TypeError: not all arguments converted during string formatting".
 
-COPY example/standalone/requirements.txt ./
+COPY example/celery5/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY setup.py /usr/src/redisbeat/
 COPY redisbeat /usr/src/redisbeat/redisbeat
 RUN pip install --no-cache-dir --no-deps /usr/src/redisbeat
 
-COPY example/standalone/tasks.py example/standalone/add_task.py example/standalone/rem_task.py ./
+COPY example/celery5/tasks.py example/celery5/add_task.py example/celery5/rem_task.py ./

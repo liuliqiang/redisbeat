@@ -67,14 +67,14 @@ or you can install from source by cloning this repository:
 
 `redisbeat` provides Docker demos under the `example/` folder, one per supported Redis topology:
 
-- `example/standalone/` — single Redis node, celery 5 (Python 3.11)
+- `example/celery5/` — single Redis node, celery 5 (Python 3.11)
 - `example/celery4/` — single Redis node, celery 4.x (Python 3.8) for legacy stacks
 - `example/cluster/` — 6-node Redis Cluster (3 masters + 3 replicas), see the [Redis Cluster mode](#redis-cluster-mode) section below
 
-To run the standalone demo:
+To run the celery 5 demo:
 
 ```
-# cd redisbeat/example/standalone
+# cd redisbeat/example/celery5
 # docker-compose up -d
 ```
 
@@ -95,13 +95,13 @@ After you have compose running, you can easily see it working with following com
 4. dynamic add the task `sub`
 
     ```
-    # docker exec -it beat python add_task.py
+    # docker exec -it beat-celery5 python add_task.py
     ```
 
 5. dynamic remove the task `sub`
 
     ```
-    # docker exec -it beat python rem_task.py
+    # docker exec -it beat-celery5 python rem_task.py
     ```
 
 # Running demo locally without Docker

@@ -1,6 +1,6 @@
 # Standalone redisbeat example pinned to celery 4.x.
 #
-# This is the legacy companion to ../standalone/ (which targets
+# This is the legacy companion to ../celery5/ (which targets
 # celery 5). Use this if you're stuck on celery 4 -- everything else
 # (redisbeat, jsonpickle, Python 3.8) is the same shape.
 #

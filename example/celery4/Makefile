@@ -1,7 +1,7 @@
 .PHONY: worker beat add_task rm_task
 
 # celery 4 CLI: `celery worker -A tasks ...`
-# (celery 5 removed this form -- see ../standalone/Makefile for the new
+# (celery 5 removed this form -- see ../celery5/Makefile for the new
 # `celery -A tasks worker ...` order.)
 
 worker:
