@@ -1,0 +1,47 @@
+# Standalone redisbeat example pinned to celery 3.1.
+#
+# This is the legacy companion to ../celery5/ (celery 5) and
+# ../celery4/ (celery 4). Use this if you're stuck on celery 3 --
+# everything else (redisbeat, Python 3.6, redis-py 2.x) is pinned to
+# match the celery 3 era.
+#
+# Run:
+#   docker compose up -d
+
+services:
+
+  worker:
+    container_name: worker-celery3
+    hostname: worker
+    restart: unless-stopped
+    build:
+      context: ../..
+      dockerfile: example/celery3/Dockerfile
+    # celery 3 CLI: `celery worker -A tasks ...` (same shape as celery
+    # 4; celery 5 reordered this to `celery -A tasks worker ...`).
+    command: ["celery", "worker", "-A", "tasks", "-l", "INFO"]
+    depends_on:
+      - redis
+    stdin_open: true
+    tty: true
+
+  beat:
+    container_name: beat-celery3
+    hostname: beat
+    restart: unless-stopped
+    build:
+      context: ../..
+      dockerfile: example/celery3/Dockerfile
+    command:
+      ["celery", "beat", "-A", "tasks", "-S", "redisbeat.RedisScheduler", "-l", "INFO"]
+    depends_on:
+      - worker
+      - redis
+    stdin_open: true
+    tty: true
+
+  redis:
+    container_name: redis-celery3
+    hostname: redis
+    restart: unless-stopped
+    image: redis:7-alpine
