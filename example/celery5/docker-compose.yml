@@ -1,12 +1,12 @@
 services:
 
   worker:
-    container_name: worker
+    container_name: worker-celery5
     hostname: worker
     restart: unless-stopped
     build:
       context: ../..
-      dockerfile: example/standalone/Dockerfile
+      dockerfile: example/celery5/Dockerfile
     command: ["celery", "-A", "tasks", "worker", "-l", "INFO"]
     depends_on:
       - redis
@@ -14,12 +14,12 @@ services:
     tty: true
 
   beat:
-    container_name: beat
+    container_name: beat-celery5
     hostname: beat
     restart: unless-stopped
     build:
       context: ../..
-      dockerfile: example/standalone/Dockerfile
+      dockerfile: example/celery5/Dockerfile
     command:
       ["celery", "-A", "tasks", "beat", "-S", "redisbeat.RedisScheduler", "-l", "INFO"]
     depends_on:
@@ -29,7 +29,7 @@ services:
     tty: true
 
   redis:
-    container_name: redis
+    container_name: redis-celery5
     hostname: redis
     restart: unless-stopped
     image: redis

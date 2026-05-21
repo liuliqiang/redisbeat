@@ -1,0 +1,12 @@
+celery>=3.1,<4
+# celery 3.1.x pulls kombu/billiard with hard upper bounds; pin them so a
+# transitive update can't drag in a kombu 4 that drops Py3.6.
+kombu>=3.0.37,<3.1
+billiard>=3.3.0.23,<3.4
+# redis-py 3+ dropped Py2-era helpers celery 3 still expects; stay on 2.x.
+redis>=2.10,<3
+# jsonpickle 3.3+ requires Py3.7+. The celery 3 era predates the 3.x
+# wire-format changes anyway, so an older line is fine here.
+jsonpickle>=1.4,<3
+# redisbeat itself is installed from local source in the Dockerfile with
+# --no-deps so its modern jsonpickle floor doesn't fight this pin.

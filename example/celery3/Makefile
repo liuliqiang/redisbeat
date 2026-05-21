@@ -1,8 +1,7 @@
 .PHONY: worker beat add_task rm_task
 
-# celery 4 CLI: `celery worker -A tasks ...`
-# (celery 5 removed this form -- see ../celery5/Makefile for the new
-# `celery -A tasks worker ...` order.)
+# celery 3 CLI: `celery worker -A tasks ...`
+# (Identical to celery 4; celery 5 reordered to `celery -A tasks worker`.)
 
 worker:
 	celery worker -A tasks -l INFO
